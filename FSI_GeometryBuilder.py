@@ -383,6 +383,8 @@ def createFlatPlate(geometryParameters):
 def createFlatFluid(parameters):
 	modelName = parameters['abaqusModelName']
 	plateName = 'Plate'
+	pinOrCombBC = parameters['pinOrCombBC']
+
 	# Grabbing all of the geometry variables for the fluid model
 	plateLength = parameters['plateLength']
 	plateWidth = parameters['plateWidth']
@@ -430,7 +432,7 @@ def createFlatFluid(parameters):
 	assembly.Instance(name = 'BulkFluid', part = bulkFluid, dependent = ON)
 
 	# Suppressing the combs if they exist
-	if pinOrCombBC.equals("comb"):
+	if pinOrCombBC == "comb":
 		for i in range(0,4):
 			assembly.features['Comb_' + str(i)].suppress()
 
