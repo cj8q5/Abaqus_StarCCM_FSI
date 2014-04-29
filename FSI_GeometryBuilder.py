@@ -429,6 +429,11 @@ def createFlatFluid(parameters):
 	assembly = mdb.models[modelName].rootAssembly
 	assembly.Instance(name = 'BulkFluid', part = bulkFluid, dependent = ON)
 
+	# Suppressing the combs if they exist
+	if pinOrCombBC.equals("comb"):
+		for i in range(0,4):
+			assembly.features['Comb_' + str(i)].suppress()
+
 	# Translating the bulkFluid part the height of the large channel 
 	assembly.translate(instanceList=('BulkFluid', ), vector=(0.0, 0.0, -lgChHeight))
 
