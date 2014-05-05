@@ -178,7 +178,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		CoSimulationAbaqus abaqus = new CoSimulationAbaqus(activeSim, "Fluid");
 		abaqus.setCouplingBoundaries(new String[] {"Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"});
 		abaqus.setAbaqusExecutionSettings(
-				"FSI_" + (int)Math.abs(initialVel[1]) + "_" + (int)(wallHeight*10) + "_Abaqus_" + 
+				"FSI_" + (int)Math.abs(initialVel[1]) +  "_Abaqus_" + 
 					(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + "_" + (int)(largeChannelHeight/0.0254*1000), 
 				abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
 		abaqus.abaqusCouplingAlgorithm(couplingScheme, "Star Leads", couplingTimeStep);
