@@ -78,6 +78,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		}
 		
 		// Grabbing the Co-Simulation settings and variables
+		int numOfPlates = reader.getIntData("numOfPlates");
 		String plateGeometry = reader.getStringData("plateGeometry");
 		String couplingScheme = reader.getStringData("couplingScheme");
 		double couplingTimeStep = reader.getDoubleData("timeStep");
@@ -128,9 +129,17 @@ public class AbaqusMeshingFSI extends StarMacro
 			IMPORTED PARTS NODE */
 		// Importing Abaqus fluid part
 		String fileLocation = currentDirectory + File.separator;
-		String abqFileName = "Star_Fluid_" + (int)(plateHeight/0.0254*1000) + 
-			"_" + (int)(smallChannelHeight/0.0254*1000) + 
-			"_" + (int)(largeChannelHeight/0.0254*1000);
+		String abqFileName;
+		if(numOfPlates == 1)
+		{
+			abqFileName = "Star_Fluid_" + (int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
+					"_" + (int)(largeChannelHeight/0.0254*1000);
+		}
+		else
+		{
+			abqFileName = "Star_Fluid_" + (int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
+					"_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack";
+		}
 		//String inputFileLocation = resolvePath(fileLocation + abqFileName);
 		ImportCAE cae = new ImportCAE(activeSim, fileLocation, "Fluid");
 		cae.importAbaqusInputFile(abqFileName, true, false);
@@ -176,11 +185,26 @@ public class AbaqusMeshingFSI extends StarMacro
 			CO-SIMULATIONS NODE */
 		// Creating the Abaqus Co-Simulation
 		CoSimulationAbaqus abaqus = new CoSimulationAbaqus(activeSim, "Fluid");
-		abaqus.setCouplingBoundaries(new String[] {"Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"});
-		abaqus.setAbaqusExecutionSettings(
-				"FSI_" + (int)Math.abs(initialVel[1]) +  "_Abaqus_" + 
-					(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + "_" + (int)(largeChannelHeight/0.0254*1000), 
-				abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
+		String[] fsiSurfaces = new String[numOfPlates*4];
+		for(int i = 0; i < numOfPlates; i++)
+		{
+			fsiSurfaces[i] = "Fluid.FSI_Back_" + i;
+			fsiSurfaces[i+1] = "Fluid.FSI_Front_" + i;
+			fsiSurfaces[i+2] = "Fluid.FSI_Bottom_" + i;
+			fsiSurfaces[i+3] = "Fluid.FSI_Top_" + i;
+		}
+		abaqus.setCouplingBoundaries(fsiSurfaces);
+		if(numOfPlates == 1)
+		{
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateHeight/0.0254*1000) +
+					"_" + (int)(smallChannelHeight/0.0254*1000) + "_" + (int)(largeChannelHeight/0.0254*1000), abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
+		}
+		else
+		{
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateHeight/0.0254*1000) + 
+					"_" + (int)(smallChannelHeight/0.0254*1000) + "_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack",
+					abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
+		}
 		abaqus.abaqusCouplingAlgorithm(couplingScheme, "Star Leads", couplingTimeStep);
 		abaqus.setFieldExchangeControls(numExchanges, iterationsPerExchange, deflectionUnderRelax);
 		abaqus.setMapperTolSettings(0.01,0.01);
@@ -194,10 +218,14 @@ public class AbaqusMeshingFSI extends StarMacro
 		
 		// Setting up the mesh morpher solver
 		MeshMorpher morpher =  new MeshMorpher(activeSim, "Fluid");
-		morpher.addRegionBoundary("Fluid.FSI_Back", "FSI");
-		morpher.addRegionBoundary("Fluid.FSI_Front", "FSI");
-		morpher.addRegionBoundary("Fluid.FSI_Bottom", "FSI");
-		morpher.addRegionBoundary("Fluid.FSI_Top", "FSI");
+		for(int i = 0; i < fsiSurfaces.length; i++)
+		{
+			morpher.addRegionBoundary(fsiSurfaces[i], "FSI");
+			//morpher.addRegionBoundary("Fluid.FSI_Back", "FSI");
+			//morpher.addRegionBoundary("Fluid.FSI_Front", "FSI");
+			//morpher.addRegionBoundary("Fluid.FSI_Bottom", "FSI");
+			//morpher.addRegionBoundary("Fluid.FSI_Top", "FSI");
+		}
 		if(morphAtInnIter.equals("yes"))
 		{
 			morpher.innerIterationMorphing(true);
@@ -224,12 +252,15 @@ public class AbaqusMeshingFSI extends StarMacro
 		
 		// Creating stopping criteria for the static pressure on the plate's wall
 		ReportsMonitorsPlots reports = new ReportsMonitorsPlots(activeSim);
-		AreaAverageReport avgPressure = reports.createAverageReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "AvgPressure");
-		MaxReport maxPressure = reports.createMaxReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MaxPressure");
-		MinReport minPressure = reports.createMinReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MinPressure");
+		String[] fsiSurfaces2 = new String[fsiSurfaces.length + 1];
+		fsiSurfaces2[0] = "Fluid";
+		for(int i = 1; i <= fsiSurfaces.length; i++)
+		{
+			fsiSurfaces2[i] = fsiSurfaces[i-1];
+		}
+		AreaAverageReport avgPressure = reports.createAverageReport(fsiSurfaces2, "AvgPressure");
+		MaxReport maxPressure = reports.createMaxReport(fsiSurfaces2, "MaxPressure");
+		MinReport minPressure = reports.createMinReport(fsiSurfaces2, "MinPressure");
 		
 		FieldFunctions fieldFunctions = new FieldFunctions(activeSim);
 		PrimitiveFieldFunction staticPressure = fieldFunctions.getStaticPressureFunction();
@@ -245,12 +276,9 @@ public class AbaqusMeshingFSI extends StarMacro
 		stoppingCriteria.createAsymStoppingCriteria("MinPressure Monitor", "Report", 1.0, 25, "AND", "Inner", fluidStopCriteria);
 		
 		// Creating stopping criteria for the wall shear stres on the plate's wall
-		AreaAverageReport avgStress = reports.createAverageReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "AvgWallShearStress");
-		MaxReport maxStress = reports.createMaxReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MaxWallShearStress");
-		MinReport minStress = reports.createMinReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MinWallShearStress");
+		AreaAverageReport avgStress = reports.createAverageReport(fsiSurfaces2, "AvgWallShearStress");
+		MaxReport maxStress = reports.createMaxReport(fsiSurfaces2, "MaxWallShearStress");
+		MinReport minStress = reports.createMinReport(fsiSurfaces2, "MinWallShearStress");
 		
 		PrimitiveFieldFunction wallShearStress = fieldFunctions.getWallShearStress();
 		VectorMagnitudeFieldFunction vectorMagnitudeFieldFunction = ((VectorMagnitudeFieldFunction) wallShearStress.getMagnitudeFunction());
@@ -266,12 +294,9 @@ public class AbaqusMeshingFSI extends StarMacro
 		stoppingCriteria.createAsymStoppingCriteria("MinWallShearStress Monitor", "Report", 1.0, 25, "AND", "Inner", fluidStopCriteria);
 		
 		// Creating stopping criteria for the plate deflection 
-		AreaAverageReport avgDeflection = reports.createAverageReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "AvgDeflection");
-		MaxReport maxDeflection = reports.createMaxReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MaxDeflection");
-		MinReport minDeflection = reports.createMinReport(
-				new String[] {"Fluid", "Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"}, "MinDeflection");
+		AreaAverageReport avgDeflection = reports.createAverageReport(fsiSurfaces2, "AvgDeflection");
+		MaxReport maxDeflection = reports.createMaxReport(fsiSurfaces2, "MaxDeflection");
+		MinReport minDeflection = reports.createMinReport(fsiSurfaces2, "MinDeflection");
 		
 		PrimitiveFieldFunction plateDeflection = fieldFunctions.getNodalDisplacement();
 		VectorMagnitudeFieldFunction plateDeflection_Mag = ((VectorMagnitudeFieldFunction) plateDeflection.getMagnitudeFunction());
@@ -344,8 +369,13 @@ public class AbaqusMeshingFSI extends StarMacro
 		ReportsMonitorsPlots wallYplusPlot = new ReportsMonitorsPlots(activeSim);
 		XYPlot wallYplus_XYPlot = wallYplusPlot.createXYPlot(new double[] {0, 1, 0}, "Plate Wall y+ Values", "Wall y+ Values");
 		fieldFunction.setXYPlotFieldFunction(wallYplus_XYPlot, "WallYplus", "0");
-		wallYplusPlot.addObjects2XYPlot(wallYplus_XYPlot, "Fluid", 
-				new String[] {"Fluid.FSI_Back", "Fluid.FSI_Front"});
+		String[] fsiSurfFB = new String[numOfPlates*2];
+		for(int i = 0; i < numOfPlates; i++)
+		{
+			fsiSurfFB[i] = "Fluid.FSI_Back_" + i;
+			fsiSurfFB[i+1] = "Fluid.FSI_Front_" + i;
+		}
+		wallYplusPlot.addObjects2XYPlot(wallYplus_XYPlot, "Fluid", fsiSurfFB);
 				
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
  			SCENES NODE */
@@ -355,7 +385,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		//fieldFunction.setSceneFieldFunction(pressure_Scene, "Morpher Displacement", "Magnitude");
 		PrimitiveFieldFunction nodalDisplacement = fieldFunction.getNodalDisplacement();
 		deflectionScene.setSceneFieldFunction(nodalDisplacement, 4);
-		deflectionScene.addObject2Scene(deflection_Scene, "Fluid", new String[] {"Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"});
+		deflectionScene.addObject2Scene(deflection_Scene, "Fluid", fsiSurfaces);
 		deflectionScene.addDerivedPart2Scene(deflection_Scene, new String[] {"CenterPlane"});
 		
 		// Creating a scene of velocity on the "CenterPlane"
@@ -368,7 +398,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		Scenes wallYScene = new Scenes(activeSim, "WallY+");
 		Scene wallY_Scene = wallYScene.createScalarScene();
 		fieldFunction.setSceneFieldFunction(wallY_Scene, "WallYplus", "0");
-		wallYScene.addObject2Scene(wallY_Scene, "Fluid", new String[] {"Fluid.FSI_Back", "Fluid.FSI_Front", "Fluid.FSI_Bottom", "Fluid.FSI_Top"});
+		wallYScene.addObject2Scene(wallY_Scene, "Fluid", fsiSurfaces);
 		
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 			SOLUTION HISTORY NODE */
@@ -395,8 +425,8 @@ public class AbaqusMeshingFSI extends StarMacro
 			SAVING AND RUNNING NODE */		
 		// Saving and running the simulation
 		String saveLocation = currentDirectory + File.separator + 
-			"FSI_" + (int)Math.abs(initialVel[1]) + "_"  + plateGeometry + '_' +
-			(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) +
+			"FSI_" + (int)Math.abs(initialVel[1]) + "_" + plateGeometry + '_' +
+			(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
 			"_" + (int)(largeChannelHeight/0.0254*1000) +".sim";
 		activeSim.saveState(saveLocation);
 		AbaqusCoSimulation coSim = (AbaqusCoSimulation) activeSim.get(CoSimulationManager.class).getCoSimulation("Abaqus Co-Simulation 1");
