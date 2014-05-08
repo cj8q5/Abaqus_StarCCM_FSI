@@ -108,8 +108,15 @@ public class AbaqusMeshingFSI extends StarMacro
 		double r_in = wettedPlateWidth/(Math.PI/4);
 		
 		double[] initialVel = {0.0, -avgChVel, 0.0};
-		double inletVel = Math.abs((smallChannelHeight + largeChannelHeight)/(smallChannelHeight + largeChannelHeight + plateHeight)*avgChVel);		
-		
+		double inletVel;
+		if(numOfPlates == 1)
+		{
+			inletVel = Math.abs( (smallChannelHeight + largeChannelHeight)/(smallChannelHeight + largeChannelHeight + plateHeight)*avgChVel );		
+		}
+		else
+		{
+			inletVel = Math.abs( (smallChannelHeight*(numOfPlates+1)/(smallChannelHeight*(numOfPlates+1) + plateHeight*numOfPlates))*avgChVel );
+		}
 		String abaqusInputFilePath = null;
 		//String abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_PinnedPlate.inp";;
 		if(pinOrCombBC.equals("pin"))
