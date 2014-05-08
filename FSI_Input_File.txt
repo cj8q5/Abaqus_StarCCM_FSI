@@ -13,9 +13,11 @@
 abaqusModelName:	string:		FSIPinComb:	'This is the name of the model in the Abaqus file
 runStar:			string:		no:				'Switch for running Star-CCM+ after Abaqus
 saveCAEFiles:		string:		yes:					'Switch for saving CAE files for the plate and fluid'
-starProcesses:		string:		4:					'Specifies the number of processes to use in Star-CCM+'
+createStarFile:		string:		yes:					'Specfies if the Star-CCM+ model is created'
+starProcesses:		string: 	4:					'Specifies the number of processes to use in Star-CCM+'
 abaqusCPUs:			integer:	4:					'Specifies the number of CPU's Abaqus will be using'
-steadyStateOrFSI:	string:		FSI:				'Specifies if the simulation will run in SS or FSI mode, true for SS and false for FSI'
+steadyStateOrFSI:	string:		FSI:				'Specifies if the simulation will run in SS or FSI mode'
+numOfPlates:		integer:	2:					'Specifies the number of plates in the model'
 
 ############################Plate Geometry Parameters#############################
 plateGeometry:		string:		Flat:				'This determines if the geometry is flat or curved'
@@ -23,24 +25,20 @@ plateLength:		float:		0.6477:				'This is the length of the plate in meters'
 plateWidth:			float:		0.1102868:			'This is the width of the plate in meters'
 plateThickness:		float: 		0.001016:			'This is the thickness of the plate in meters'
 
-
 ########################Fluid Channel Geometry Parameters#########################
 smChHeight:			float:		0.00254:			'This is the thickness of the small fluid channel'
 lgChHeight:			float:		0.00254:			'This is the thickness of the large fluid channel'
 
-
 ########################Fluid Plenum Geometry Parameters##########################
 inletPlLength:		float:		0.1905:				'This is the length of the inlet plenum'
 outletPlLength:		float:		0.0762:				'This is the length of the outlet plenum'
-
 
 #############################Plate Material Properties##############################
 plateMaterial:		string:		Aluminum:			'The material of the plate'
 elasticModulus:		float:		68900000000:		'The elastic modulus of the plate material'
 poissonsRatio:		float:		0.33:				'The Poisson's ratio of the plate material'
 plateDensity:		float:		2700.0:				'The density of the plate material'
-pinOrCombBC:		string:		comb:				'"pin", "comb", or "none"'
-
+pinOrCombBC:		string:		none:				'"pin", "comb", or "none"'
 
 #############################FSI Coupling Parameters##############################
 couplingScheme:		string:		Explicit:			'Specifies the coupling scheme for FSI'
@@ -57,7 +55,6 @@ fluidStopCriteria:	string:		true:				'Specifies if the StarCCM+ stopping criteri
 courantNumber:		float:		50:					'Specifies the Courant/CFL number in Star-CCM+ Coupled Solver'
 guessedAbaqusStep:	string:		no:					'Specifies if the FSI model has steady-state Abaqus step initially'
 
-
 ##############################Plate Mesh Parameters###############################
 elemType:			string:		SC8R:			'Specifies the element type to be Shell or Continuum'
 plateThickNodes:	integer:	1:				'Specifies the number of nodes through the plate thickness'
@@ -70,7 +67,6 @@ plateWidthNodes:	integer:	50:				'Specifies the number of nodes along the plate 
 plateWidthBias:		float:		1.0:			'Specifies the bias ratio along the plate width'
 
 clampedWidthNodes:	integer:	3:				'Specifies the number of nodes along the clamped width'
-
 
 ##############################Fluid Mesh Parameters###############################
 flPlLenNodes:		integer:	255:			'Specifies the number of nodes along the plate length'
@@ -87,10 +83,10 @@ flOutletBias:		float:		4.0:			'Specifies the bias ratio along the fluid inlet le
 
 chBiasDirection:	string:		Center:			'Specifies if the bias is towards the center or the ends'
 flSmChHeightNodes:	integer:	16:				'Specifies the number of nodes through the small channel'
-flSmChHeightBias:	float: 		4.0:			'Specifies the bias ratio through the small channel'
+flSmChHeightBias:	float: 		1.3:			'Specifies the bias ratio through the small channel'
 
 flLgChHeightNodes:	integer:	20:				'Specifies the number of nodes through the large channel'
-flLgChHeightBias:	float: 		4.0:			'Specifies the bias ratio through the large channel'
+flLgChHeightBias:	float: 		1.3:			'Specifies the bias ratio through the large channel'
 
 flPlHeightNodes:	integer:	8:				'Specifies the number of nodes through the plate height'
 flPlHeightBias:		float: 		1.0:			'Specifies the bias ratio through the plate height'

@@ -22,17 +22,20 @@ public class FSI_Abaqus_StarCCM
         
         // Running the Abaqus Python script for building the plate and fluid models
         Console.WriteLine("\n Abaqus is building the fluid and solid domain geomtries...\n");
-        string buildAbaqusCall = "/C abaqus cae noGUI=FSI_GeometryBuilder.py";
+        string buildAbaqusCall = "/K abaqus cae noGUI=FSI_GeometryBuilder.py";
         var abaqusProcess = Process.Start("cmd.exe", buildAbaqusCall);
         abaqusProcess.WaitForExit();
         Console.WriteLine("\n Abaqus has finished building the fluid and solid domains!\n");
 
         // Running Star-CCM+ to build the fluid model and setup the FSI problem
-        Console.WriteLine("\n Star-CCM+ is now building the fluid model and setting up the FSI problem...\n");
-        string buildStarCall = "/C starccm+ -new -np 1 -batch AbaqusMeshingFSI.java";
-        var starProcess = Process.Start("cmd.exe", buildStarCall);
-        starProcess.WaitForExit();
-        Console.WriteLine("\n Star-CCM+ has finished building the fluid model and the FSI problem!\n");
+        if (getStringData("createStarFile").Equals("yes"))
+        {
+            Console.WriteLine("\n Star-CCM+ is now building the fluid model and setting up the FSI problem...\n");
+            string buildStarCall = "/K starccm+ -new -np 1 -batch AbaqusMeshingFSI.java";
+            var starProcess = Process.Start("cmd.exe", buildStarCall);
+            starProcess.WaitForExit();
+            Console.WriteLine("\n Star-CCM+ has finished building the fluid model and the FSI problem!\n");
+        }
 
         // Running the FSI simulation
         if(getStringData("runStar").Equals("yes"))
@@ -106,6 +109,9 @@ public class FSI_Abaqus_StarCCM
         }
 	}
 
+    /**
+     * Getter methods for getting the double, string, and integer data
+     */
     public static double getDoubleData(string variableName)
     {
         double variable = (double)m_doubleParameters[variableName];

@@ -29,6 +29,9 @@ import subprocess
 import math
 
 #-----------------------------------------------------------------------------------------------------------
+'''
+	This method creates a flat plate for a FSI simulation
+'''
 def createFlatPlate(geometryParameters):
 	# GRABBING ALL OF THE GEOMETRY PARAMETERS
 	plateName = 'Plate'
@@ -40,6 +43,7 @@ def createFlatPlate(geometryParameters):
 	lgChHeight = parameters['lgChHeight']
 	inletLength = parameters['inletPlLength']
 	outletLength = parameters['outletPlLength']
+	numOfPlates = parameters['numOfPlates']
 
 	# Grabbing all of the mesh parameters
 	elemType = parameters['elemType']
@@ -66,6 +70,7 @@ def createFlatPlate(geometryParameters):
 
 	mdb.Model(name=modelName, modelType = STANDARD_EXPLICIT)
 
+	##--------------------------------------------PARTS NODE-------------------------------------------------------
 	# Creating part named 'FlatPlate'
 	plateSize = [ (-0.0127, 0.0), (plateWidth + 0.0127, plateLength), (plateThickness) ]
 	plate = createBox(modelName, plateName, plateSize)
@@ -155,37 +160,38 @@ def createFlatPlate(geometryParameters):
 	plate.Set(faces = clampedFaces, name = 'ClampedFaces')
 
 	# Creating the set of vertices where the plate will be pinned
-	plateVertices = plate.vertices
-	pinVertices = plateVertices.findAt(
-							((plateWidth*0.5,	plateLength,	0.0),),
-							((plateWidth*0.5,	plateLength,	plateThickness),),
-							((plateWidth*0.5,	0.0,			0.0),),
-							((plateWidth*0.5,	0.0,			plateThickness),))
-	plate.Set(vertices = pinVertices, name = 'Pins')
+	if pinOrCombBC == "pin":
+		plateVertices = plate.vertices
+		pinVertices = plateVertices.findAt(
+								((plateWidth*0.5,	plateLength,	0.0),),
+								((plateWidth*0.5,	plateLength,	plateThickness),),
+								((plateWidth*0.5,	0.0,			0.0),),
+								((plateWidth*0.5,	0.0,			plateThickness),))
+		plate.Set(vertices = pinVertices, name = 'Pins')
 	
 	# Creating the FSI_INTERFACE surface
-	fsiFaces = plateFaces.findAt(
-	                        ((plateWidth*0.25,		plateLength*0.5,	0.0),), 
-							((plateWidth*0.25,		plateLength*0.5,	plateThickness),),
-	                        ((plateWidth*0.25,		0.0,				plateThickness*0.5),),
-							((plateWidth*0.25,		plateLength,		plateThickness*0.5),),
-	                        ((plateWidth*0.75,		plateLength*0.5,	0.0),),
-							((plateWidth*0.75,		plateLength*0.5,	plateThickness),),
-	                        ((plateWidth*0.75,		0.0,				plateThickness*0.5),),
-							((plateWidth*0.75,		plateLength,		plateThickness*0.5),))
-	plate.Surface(side1Faces = fsiFaces, name = 'FSI_INTERFACE')
+	#fsiFaces = plateFaces.findAt(
+	#                        ((plateWidth*0.25,		plateLength*0.5,	0.0),), 
+	#						((plateWidth*0.25,		plateLength*0.5,	plateThickness),),
+	#                        ((plateWidth*0.25,		0.0,				plateThickness*0.5),),
+    #							((plateWidth*0.25,		plateLength,		plateThickness*0.5),),
+	#                        ((plateWidth*0.75,		plateLength*0.5,	0.0),),
+	#						((plateWidth*0.75,		plateLength*0.5,	plateThickness),),
+	#                       ((plateWidth*0.75,		0.0,				plateThickness*0.5),),
+	#						((plateWidth*0.75,		plateLength,		plateThickness*0.5),))
+	#plate.Surface(side1Faces = fsiFaces, name = 'FSI_INTERFACE')
 
-	# Creating the small channel master surface
-	smChMasterFaces = plateFaces.findAt( 
-							((plateWidth*0.25,		plateLength*0.5,	plateThickness),), 
-							((plateWidth*0.75,		plateLength*0.5,	plateThickness),))
-	plate.Surface(side2Faces = smChMasterFaces, name = 'SmChMaster')
+	# Creating the small and larage channel master surfaces
+	if pinOrCombBC == "comb":
+		smChMasterFaces = plateFaces.findAt( 
+								((plateWidth*0.25,		plateLength*0.5,	plateThickness),), 
+								((plateWidth*0.75,		plateLength*0.5,	plateThickness),))
+		plate.Surface(side2Faces = smChMasterFaces, name = 'SmChMaster')
 
-	# Creating the large channel master surface
-	lgChMasterFaces = plateFaces.findAt( 
-	                        ((plateWidth*0.25,		plateLength*0.5,	0.0),),
-							((plateWidth*0.75,		plateLength*0.5,	0.0),))
-	plate.Surface(side2Faces = lgChMasterFaces, name = 'LgChMaster')
+		lgChMasterFaces = plateFaces.findAt( 
+								((plateWidth*0.25,		plateLength*0.5,	0.0),),
+								((plateWidth*0.75,		plateLength*0.5,	0.0),))
+		plate.Surface(side2Faces = lgChMasterFaces, name = 'LgChMaster')
 
 	if guessedAbaqusStep == "yes":
 		guessedPressureFaces = plateFaces.findAt(
@@ -193,16 +199,20 @@ def createFlatPlate(geometryParameters):
 							((plateWidth*0.75,		plateLength*0.5,	plateThickness),))
 		plate.Surface(side1Faces = guessedPressureFaces, name = 'Guessed_Pressure_Surface')
 
+	##-----------------------------------------MATERIALS NODE-------------------------------------------------------
 	# Creating the plate material aluminum
 	mdb.models[modelName].Material(name=plateMaterial)
 	mdb.models[modelName].materials[plateMaterial].Density(table=((plateDensity, ), ))
 	mdb.models[modelName].materials[plateMaterial].Elastic(table=((elasticModulus, poissonsRatio), ))
-
+	
+	##-----------------------------------------SECTIONS NODE-------------------------------------------------------
 	# Setting and creating the section assignment for the plate
 	plateRegion = plate.sets['EntirePlateGeometry']
 	plateCellsRegion = plate.sets['EntirePlateGeometry'].cells
 	shellStack = plateFaces.findAt(
 							((plateWidth*0.25,		plateLength*0.5,	plateThickness),))
+
+	##-----------------------------------------MESH NODE-------------------------------------------------------
 	if elemType == "C3D8I":
 		element = C3D8I
 		mdb.models[modelName].HomogeneousSolidSection(name='PlateSection_Solid', 
@@ -248,121 +258,145 @@ def createFlatPlate(geometryParameters):
 	# Meshing the part
 	plate.generateMesh()
 
-	# Adding the plate as an instance to the assembly
+	##------------------------------------------ASSEMBLY NODE-----------------------------------------------------
+	# Adding the plates as instances to the assembly
+	fsiInterfaceList = []
+	plateSpacing = plateThickness + smChHeight
 	assembly = mdb.models[modelName].rootAssembly
-	assembly.Instance(name = plateName, part = plate, dependent = ON)
+	for i in range(0, numOfPlates):
+		assembly.Instance(name = plateName + "_" + str(i), part = plate, dependent = ON)
+		if i >= 1:
+			assembly.translate(instanceList=(plateName + "_" + str(i), ), 
+								vector=(0.0, 0.0, plateSpacing*i))
+		
+		plateFacesTmp = assembly.instances['Plate_' + str(i)].faces
+		tempList = ()
+		w = 0.25
+		for j in range(0, 2):
+			tempList = (((plateWidth*w,		plateLength*0.5,	plateSpacing*i),),) + tempList 
+			tempList = (((plateWidth*w,		plateLength*0.5,	plateThickness + plateSpacing*i),),) + tempList
+			tempList = (((plateWidth*w,		0.0,				plateThickness*0.5 + plateSpacing*i),),) + tempList
+			tempList = (((plateWidth*w,		plateLength,		plateThickness*0.5 + plateSpacing*i),),) + tempList
+			w = 0.75
+		fsiInterfaceList.append(plateFacesTmp.findAt(tempList[0], tempList[1], tempList[2], tempList[3], 
+														tempList[4], tempList[5], tempList[6], tempList[7]))
 
-	# Setting the clamped boundary condition on the clamped regions of the plate
-	clampedRegion = assembly.instances[plateName].sets['ClampedFaces']
-	mdb.models[modelName].PinnedBC(name = 'Clamps', createStepName = 'Initial', 
-                              region = clampedRegion, localCsys = None)
+		# Setting the clamped boundary condition on the clamped regions of the plate
+		clampedRegion = assembly.instances[plateName + "_" + str(i)].sets['ClampedFaces']
+		mdb.models[modelName].PinnedBC(name = 'Clamps_' + str(i), createStepName = 'Initial', 
+								region = clampedRegion, localCsys = None)
 
-	# Creating either a pinned or combed boundary condition
-	if pinOrCombBC == 'pin':
-		pinRegion = assembly.instances[plateName].sets['Pins']
-		mdb.models[modelName].DisplacementBC(name='Pins', 
-			createStepName='Initial', region=pinRegion, u1=UNSET, u2=UNSET, u3=SET, 
-			ur1=UNSET, ur2=UNSET, ur3=UNSET, amplitude=UNSET, 
-			distributionType=UNIFORM, fieldName='', localCsys=None)
+		##-----------------------------------------BOUNDARY CONDITIONS -----------------------------------------------
+		# Creating either a pinned or combed boundary condition
+		if pinOrCombBC == 'pin':
+			pinRegion = assembly.instances[plateName + "_" + str(i)].sets['Pins']
+			mdb.models[modelName].DisplacementBC(name='Pins', 
+				createStepName='Initial', region=pinRegion, u1=UNSET, u2=UNSET, u3=SET, 
+				ur1=UNSET, ur2=UNSET, ur3=UNSET, amplitude=UNSET, 
+				distributionType=UNIFORM, fieldName='', localCsys=None)
 
-	elif pinOrCombBC == 'comb':
-		combRadius = 0.086*0.0254*0.5
-		combOffset = 0.003*0.0254
-		combSize = [ combRadius, 0.01 ]
-		combPositions = [ (plateWidth*0.5, plateLength - combRadius, plateThickness + combOffset),
-							(plateWidth*0.5, plateLength - combRadius, -(combOffset + combSize[1])),
-							(plateWidth*0.5, combRadius, plateThickness + combOffset),
-							(plateWidth*0.5, combRadius, -(combOffset + combSize[1])) ]
-		mdb.models[modelName].ContactProperty('IntProp')
-		for i in range(0,4):
-			# Creating the comb part
-			comb = createCylinder(modelName,'Comb_' + str(i),combSize)
-			combFaces = comb.faces
-			combCells = comb.cells
+		elif pinOrCombBC == 'comb':
+			combRadius = 0.086*0.0254*0.5
+			combOffset = 0.003*0.0254
+			combSize = [ combRadius, 0.01 ]
+			combPositions = [ (plateWidth*0.5, plateLength - combRadius, plateThickness + combOffset),
+								(plateWidth*0.5, plateLength - combRadius, -(combOffset + combSize[1])),
+								(plateWidth*0.5, combRadius, plateThickness + combOffset),
+								(plateWidth*0.5, combRadius, -(combOffset + combSize[1])) ]
+			mdb.models[modelName].ContactProperty('IntProp')
+			for i in range(0,4):
+				# Creating the comb part
+				comb = createCylinder(modelName,'Comb_' + str(i),combSize)
+				combFaces = comb.faces
+				combCells = comb.cells
 
-			# Creating the master and slave surface for the interaction and the region set for the rigid body
-			if i == 0 or i == 2:
-				masterSurf = assembly.instances[plateName].surfaces['SmChMaster']
-				slaveSurface = combFaces.findAt( ((0.0, 0.0, 0.0),) )
-				comb.Surface(side1Faces = slaveSurface, name = 'Comb_' + str(i) + '_Slave')
-			elif i == 1 or i == 3:
-				masterSurf = assembly.instances[plateName].surfaces['LgChMaster']
-				slaveSurface = combFaces.findAt( ((0.0, 0.0, combSize[1]),) )
-				comb.Surface(side1Faces = slaveSurface, name = 'Comb_' + str(i) + '_Slave')
+				# Creating the master and slave surface for the interaction and the region set for the rigid body
+				if i == 0 or i == 2:
+					masterSurf = assembly.instances[plateName + "_" + str(i)].surfaces['SmChMaster']
+					slaveSurface = combFaces.findAt( ((0.0, 0.0, 0.0),) )
+					comb.Surface(side1Faces = slaveSurface, name = 'Comb_' + str(i) + '_Slave')
+				elif i == 1 or i == 3:
+					masterSurf = assembly.instances[plateName + "_" + str(i)].surfaces['LgChMaster']
+					slaveSurface = combFaces.findAt( ((0.0, 0.0, combSize[1]),) )
+					comb.Surface(side1Faces = slaveSurface, name = 'Comb_' + str(i) + '_Slave')
 
-			# Creating the region for the comb
-			entireComb = combCells.getByBoundingBox(
-									  xMin = -1, yMin = -1, zMin = -1,
-									  xMax = 1, yMax = 1, zMax = 1)
-			comb.Set(cells = entireComb, name = 'CombCells_' + str(i))
-			combRegionCells = comb.Set(cells = entireComb, name = 'CombCells_' + str(i)).cells
+				# Creating the region for the comb
+				entireComb = combCells.getByBoundingBox(
+										  xMin = -1, yMin = -1, zMin = -1,
+										  xMax = 1, yMax = 1, zMax = 1)
+				comb.Set(cells = entireComb, name = 'CombCells_' + str(i))
+				combRegionCells = comb.Set(cells = entireComb, name = 'CombCells_' + str(i)).cells
 
-			# Meshing the comb
-			planesPartition = [YZPLANE, XZPLANE]
-			for j in range(0,2):
-				comb.DatumPlaneByPrincipalPlane(principalPlane = planesPartition[j], offset = 0.0)
-				datumPlanes = comb.datums
-				pickedCells = combCells.findAt( ((0.0, combSize[0], combSize[1]*0.5),),
-												((-combSize[0], 0.0, combSize[1]*0.5),) )
-				comb.PartitionCellByDatumPlane(datumPlane = datumPlanes[(j*2)+5], cells = pickedCells)
+				# Meshing the comb
+				planesPartition = [YZPLANE, XZPLANE]
+				for j in range(0,2):
+					comb.DatumPlaneByPrincipalPlane(principalPlane = planesPartition[j], offset = 0.0)
+					datumPlanes = comb.datums
+					pickedCells = combCells.findAt( ((0.0, combSize[0], combSize[1]*0.5),),
+													((-combSize[0], 0.0, combSize[1]*0.5),) )
+					comb.PartitionCellByDatumPlane(datumPlane = datumPlanes[(j*2)+5], cells = pickedCells)
 				
-			comb.seedPart(size = 2*math.pi*combRadius*0.25, deviationFactor = 0.1, minSizeFactor = 0.1)
+				comb.seedPart(size = 2*math.pi*combRadius*0.25, deviationFactor = 0.1, minSizeFactor = 0.1)
 
-			if elemType == 'SC8R':
-				mdb.models[modelName].HomogeneousSolidSection(name='PlateSection_Solid', 
-					material=plateMaterial, thickness=None)
-			element = C3D8I
-			sectionRegion = comb.sets['CombCells_' + str(i)]
-			comb.SectionAssignment(region=sectionRegion, sectionName='PlateSection_Solid', offset=0.0, 
-				offsetType=MIDDLE_SURFACE, offsetField='', 
-				thicknessAssignment=FROM_SECTION)
-			elemType = mesh.ElemType(elemCode = element, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
-								distortionControl = DEFAULT)
-			comb.setElementType(regions = (combRegionCells, ), elemTypes = (elemType, ))
-			comb.generateMesh()
+				if elemType == 'SC8R':
+					mdb.models[modelName].HomogeneousSolidSection(name='PlateSection_Solid', 
+						material=plateMaterial, thickness=None)
+				element = C3D8I
+				sectionRegion = comb.sets['CombCells_' + str(i)]
+				comb.SectionAssignment(region=sectionRegion, sectionName='PlateSection_Solid', offset=0.0, 
+					offsetType=MIDDLE_SURFACE, offsetField='', 
+					thicknessAssignment=FROM_SECTION)
+				elemType = mesh.ElemType(elemCode = element, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
+									distortionControl = DEFAULT)
+				comb.setElementType(regions = (combRegionCells, ), elemTypes = (elemType, ))
+				comb.generateMesh()
 
-			# Adding the comb to the assembly
-			assembly = mdb.models[modelName].rootAssembly
-			assembly.Instance(name = 'Comb_' + str(i), part = comb, dependent = ON)
+				# Adding the comb to the assembly
+				assembly = mdb.models[modelName].rootAssembly
+				assembly.Instance(name = 'Comb_' + str(i), part = comb, dependent = ON)
 
-			# Translating the comb
-			assembly.translate(instanceList=('Comb_' + str(i), ), vector=(combPositions[i]))
+				# Translating the comb
+				assembly.translate(instanceList=('Comb_' + str(i), ), vector=(combPositions[i]))
 
-			# Creating the interaction between the plate and the comb
-			combSlave = assembly.instances['Comb_' + str(i)].surfaces['Comb_' + str(i) + '_Slave']
-			mdb.models[modelName].SurfaceToSurfaceContactStd(
-				name='Comb_' + str(i) + 'Int', createStepName='Initial', master=masterSurf, 
-				slave=combSlave, sliding=FINITE, thickness=ON, 
-				interactionProperty='IntProp', adjustMethod=NONE, 
-				initialClearance=OMIT, datumAxis=None, clearanceRegion=None)
+				# Creating the interaction between the plate and the comb
+				combSlave = assembly.instances['Comb_' + str(i)].surfaces['Comb_' + str(i) + '_Slave']
+				mdb.models[modelName].SurfaceToSurfaceContactStd(
+					name='Comb_' + str(i) + 'Int', createStepName='Initial', master=masterSurf, 
+					slave=combSlave, sliding=FINITE, thickness=ON, 
+					interactionProperty='IntProp', adjustMethod=NONE, 
+					initialClearance=OMIT, datumAxis=None, clearanceRegion=None)
 
-		# Creating a set of all four combs
-		combList = []
-		for i in range(0,4):
-			combCells0 = assembly.instances['Comb_' + str(i)].cells
-			combCells_0 = combCells0.getByBoundingBox(
-											xMin = -1, yMin = -1, zMin = -1,
-											xMax = 1, yMax = 1, zMax = 1)
-			combList.append(combCells_0)
+			# Creating a set of all four combs
+			combList = []
+			for i in range(0,4):
+				combCells0 = assembly.instances['Comb_' + str(i)].cells
+				combCells_0 = combCells0.getByBoundingBox(
+												xMin = -1, yMin = -1, zMin = -1,
+												xMax = 1, yMax = 1, zMax = 1)
+				combList.append(combCells_0)
 
-		combRegions = assembly.Set(cells = combList[0]+combList[1]+combList[2]+combList[3], name = 'Combs')
+			combRegions = assembly.Set(cells = combList[0]+combList[1]+combList[2]+combList[3], name = 'Combs')
 
 		
-		# Creating a reference point for the rigid body
-		assembly.ReferencePoint(point = (0.0, 0.0, 0.0))
-		refPts = assembly.referencePoints
-		refPt = (refPts[12], )
-		refPtRegion = regionToolset.Region(referencePoints=refPt)
+			# Creating a reference point for the rigid body
+			assembly.ReferencePoint(point = (0.0, 0.0, 0.0))
+			refPts = assembly.referencePoints
+			refPt = (refPts[12], )
+			refPtRegion = regionToolset.Region(referencePoints=refPt)
 
-		# Setting boundary condition for the reference point
-		mdb.models[modelName].EncastreBC(name='RefPfRigid', createStepName='Initial', 
-			region=refPtRegion, localCsys=None)
+			# Setting boundary condition for the reference point
+			mdb.models[modelName].EncastreBC(name='RefPfRigid', createStepName='Initial', 
+				region=refPtRegion, localCsys=None)
 
-		# Creating the rigid body
-		mdb.models[modelName].RigidBody(name='RigidComb', 
-			refPointRegion=refPtRegion, bodyRegion=combRegions, refPointAtCOM=ON)
+			# Creating the rigid body
+			mdb.models[modelName].RigidBody(name='RigidComb', 
+				refPointRegion=refPtRegion, bodyRegion=combRegions, refPointAtCOM=ON)
+
+	# Creating the FSI interface for all plates in the stack
+	assembly.Surface(side1Faces = fsiInterfaceList, name = 'FSI_INTERFACE')
 
 
+	##-------------------------------------------JOBS NODE-------------------------------------------------------
 	# Creating and writing the input file to the Abaqus work directory
 	if pinOrCombBC == 'pin':
 		BC = str(int(plateThickness/0.0254*1000)) + '_Pinned'
@@ -370,7 +404,7 @@ def createFlatPlate(geometryParameters):
 	elif pinOrCombBC == 'comb':
 		BC = str(int(plateThickness/0.0254*1000)) + '_Combed'
 
-	elif pinOrCombBC == 'no':
+	elif pinOrCombBC == 'none':
 		BC = str(int(plateThickness/0.0254*1000)) + '_Free'
 
 	# Creating the job for creating and appending the input file
@@ -380,10 +414,15 @@ def createFlatPlate(geometryParameters):
 	# Appending the written input file for explicit FSI coupling
 	appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
 
+
+'''
+	This module creates the fluid geometry around a flat plate
+'''
 def createFlatFluid(parameters):
 	modelName = parameters['abaqusModelName']
 	plateName = 'Plate'
 	pinOrCombBC = parameters['pinOrCombBC']
+	numOfPlates = parameters['numOfPlates']
 
 	# Grabbing all of the geometry variables for the fluid model
 	plateLength = parameters['plateLength']
@@ -412,20 +451,10 @@ def createFlatFluid(parameters):
 	biasDirection = parameters['chBiasDirection']
 
 	# Creating part named 'BulkFluid'
-	size = [ (0.0, -outletPlLength), 
-			(plateWidth, plateLength + inletPlLength), 
-			(plateThickness + smChHeight + lgChHeight) ]
+	plateSpacing = plateThickness + smChHeight
+	bulkFluidThickness = (plateThickness + smChHeight + lgChHeight) + plateSpacing*(numOfPlates - 1)
+	size = [ (0.0, -outletPlLength), (plateWidth, plateLength + inletPlLength), (bulkFluidThickness) ]
 	bulkFluid = createBox(modelName, 'BulkFluid', size)
-	bulkFluid = mdb.models[modelName].Part(name='BulkFluid', dimensionality=THREE_D, type=DEFORMABLE_BODY)
-	bulkFluid = mdb.models[modelName].parts['BulkFluid']
-
-	plateSketch = mdb.models[modelName].ConstrainedSketch(name='__profile__', sheetSize=2.0)
-	plateSketch.setPrimaryObject(option=STANDALONE)
-
-	plateSketch.rectangle(point1=(0.0, -outletPlLength), point2=(plateWidth, plateLength + inletPlLength))
-
-	bulkFluid.BaseSolidExtrude(sketch=plateSketch, depth=plateThickness + smChHeight + lgChHeight)
-	plateSketch.unsetPrimaryObject()
 
 	# Adding the bulk fluid as an instance to the assembly
 	assembly = mdb.models[modelName].rootAssembly
@@ -440,18 +469,24 @@ def createFlatFluid(parameters):
 	assembly.translate(instanceList=('BulkFluid', ), vector=(0.0, 0.0, -lgChHeight))
 
 	# Cutting the plate instance from the bulkFluid instance to create the Fluid part
+	plates = []
+	for i in range(0, numOfPlates):
+		plate = assembly.instances[plateName + "_" + str(i)]
+		plates.append(plate)
+
 	assembly.InstanceFromBooleanCut(name='Fluid', 
 		instanceToBeCut=assembly.instances['BulkFluid'], 
-		cuttingInstances=(assembly.instances[plateName], ), 
+		cuttingInstances=plates, 
 		originalInstances=SUPPRESS)
 	assembly.features.changeKey( fromName = 'Fluid-1', toName = 'Fluid' )
 
-	# Creating three datum planes on the fluid part
+	# Creating the datum planes on the fluid part for partitioning
 	fluid = mdb.models[modelName].parts['Fluid']
-	fluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0.0)
 	fluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=plateLength)
-	fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=0.0)
-	fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=plateThickness)
+	fluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0.0)
+	for i in range(0, numOfPlates):
+		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=plateSpacing*i)
+		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=(plateSpacing*i) + plateThickness)
 
 	# Grabbing the datum planes and the cells of the fluid for partitioning the fluid
 	fluidCells = fluid.cells
@@ -463,136 +498,74 @@ def createFlatFluid(parameters):
 								xMax = 1, yMax = 1, zMax = 1)
 	fluid.Set(cells = entireFluidGeometry, name = 'EntireFluidGeometry')
 
-	# Partitioning the plate into three sections, wetted region and clamped regions
-	pickedCells = fluid.sets['EntireFluidGeometry'].cells
-	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[2], cells=pickedCells)
-
-	pickedCells = fluid.sets['EntireFluidGeometry'].cells
-	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[3], cells=pickedCells)
-
-	pickedCells = fluid.sets['EntireFluidGeometry'].cells
-	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[4], cells=pickedCells)
-
-	pickedCells = fluid.sets['EntireFluidGeometry'].cells
-	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[5], cells=pickedCells)
+	# Partitioning the fluid for meshing
+	for i in range(2, (numOfPlates*2)+4):
+		pickedCells = fluid.sets['EntireFluidGeometry'].cells
+		fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[i], cells=pickedCells)
 
 	# Creating all the sets of edges in the fluid part
 	fluidEdges = fluid.edges
-	flowPlateLengthEdges = fluidEdges.findAt(
-                            ((0.0, 			plateLength*0.5,	0.0),),
-                            ((0.0, 			plateLength*0.5,	plateThickness),),
-                            ((0.0, 			plateLength*0.5,	-lgChHeight),),
-                            ((0.0, 			plateLength*0.5,	smChHeight + plateThickness),),
-                            ((plateWidth, 	plateLength*0.5,	0.0),),
-                            ((plateWidth, 	plateLength*0.5,	plateThickness),),
-                            ((plateWidth, 	plateLength*0.5,	-lgChHeight),),
-                            ((plateWidth, 	plateLength*0.5,	smChHeight + plateThickness),))
-	fluid.Set(edges=flowPlateLengthEdges, name='FluidPlateLength')
+	pos = [ 'FluidPlateLength', plateLength*0.5, 
+			'FluidOutletLength', -outletPlLength*0.5,
+			'FluidInletLength', plateLength + (inletPlLength*0.5) ]
+	for k in range(0, 3):
+		flowPlateEdges = []
+		for i in range(0, numOfPlates+1):
+			w = 0.0
+			for j in range(0, 2):
+				flowPlateEdges.append(fluidEdges.findAt( ((w,	pos[(k*2)+1],	-lgChHeight + plateSpacing*i),) ))
+				flowPlateEdges.append(fluidEdges.findAt( ((w,	pos[(k*2)+1],	plateSpacing*i),) ))
+				w = plateWidth
+		fluid.Set(edges=flowPlateEdges, name=pos[k*2])
 
-	flowOutletLengthEdges = fluidEdges.findAt(
-                            ((0.0, 			-outletPlLength*0.5,	0.0),),
-                            ((0.0, 			-outletPlLength*0.5,	plateThickness),),
-                            ((0.0, 			-outletPlLength*0.5,	-lgChHeight),),
-                            ((0.0, 			-outletPlLength*0.5,	smChHeight + plateThickness),),
-                            ((plateWidth, 	-outletPlLength*0.5,	0.0),),
-                            ((plateWidth, 	-outletPlLength*0.5,	plateThickness),),
-                            ((plateWidth, 	-outletPlLength*0.5,	-lgChHeight),),
-                            ((plateWidth, 	-outletPlLength*0.5,	smChHeight + plateThickness),))
-	fluid.Set(edges=flowOutletLengthEdges, name='FluidOutletLength')
 
-	flowInletLengthEdges = fluidEdges.findAt(
-                            ((0.0, 			plateLength + (inletPlLength*0.5),	0.0),),
-                            ((0.0, 			plateLength + (inletPlLength*0.5),	plateThickness),),
-                            ((0.0, 			plateLength + (inletPlLength*0.5),	-lgChHeight),),
-                            ((0.0, 			plateLength + (inletPlLength*0.5),	smChHeight + plateThickness),),
-                            ((plateWidth, 	plateLength + (inletPlLength*0.5),	0.0),),
-                            ((plateWidth, 	plateLength + (inletPlLength*0.5),	plateThickness),),
-                            ((plateWidth, 	plateLength + (inletPlLength*0.5),	-lgChHeight),),
-                            ((plateWidth, 	plateLength + (inletPlLength*0.5),	smChHeight + plateThickness),))
-	fluid.Set(edges=flowInletLengthEdges, name='FluidInletLength')
+	zPos = ['LargeChHeight', -lgChHeight*0.5, 
+			'SmallChHeight', plateThickness + smChHeight*0.5,
+			'PlateHeight', plateThickness*0.5]
+	yPos = [ -outletPlLength, 0.0, plateLength, plateLength + inletPlLength ] 
+	for k in range(0, len(zPos)/2):
+		flowPlateEdges = []
+		w = 0.0
+		for i in range(0, numOfPlates):
+			for l in range(0,len(yPos)):
+				w = 0.0
+				for j in range(0, 2):
+					if zPos[k*2] == 'PlateHeight':
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], zPos[(k*2)+1] + plateSpacing*i),) ))
+					else:
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], zPos[(k*2)+1] + plateSpacing*i*2),) ))
+					w = plateWidth
+		fluid.Set(edges=flowPlateEdges, name=zPos[k*2])
 
-	lgChannelEdges = fluidEdges.findAt(
-                            ((0.0, 			-outletPlLength,				-lgChHeight*0.5),),
-                            ((plateWidth,	-outletPlLength,				-lgChHeight*0.5),),
-                            ((0.0, 			0.0,							-lgChHeight*0.5),),
-                            ((plateWidth,	0.0,							-lgChHeight*0.5),),
-                            ((0.0, 			plateLength,					-lgChHeight*0.5),),
-                            ((plateWidth, 	plateLength,					-lgChHeight*0.5),),
-                            ((0.0, 			plateLength + inletPlLength,	-lgChHeight*0.5),),
-                            ((plateWidth, 	plateLength + inletPlLength,	-lgChHeight*0.5),))
-	fluid.Set(edges=lgChannelEdges, name='LargeChHeight')
-
-	smChannelEdges = fluidEdges.findAt(
-                            ((0.0, 			-outletPlLength,				plateThickness + smChHeight*0.5),),
-                            ((plateWidth,	-outletPlLength,				plateThickness + smChHeight*0.5),),
-                            ((0.0, 			0.0,							plateThickness + smChHeight*0.5),),
-                            ((plateWidth,	0.0,							plateThickness + smChHeight*0.5),),
-                            ((0.0, 			plateLength,					plateThickness + smChHeight*0.5),),
-                            ((plateWidth, 	plateLength,					plateThickness + smChHeight*0.5),),
-                            ((0.0, 			plateLength + inletPlLength,	plateThickness + smChHeight*0.5),),
-                            ((plateWidth, 	plateLength + inletPlLength,	plateThickness + smChHeight*0.5),))
-	fluid.Set(edges=smChannelEdges, name='SmallChHeight')
-
-	plateEdges = fluidEdges.findAt(
-                            ((0.0, 			-outletPlLength,				plateThickness*0.5),),
-                            ((plateWidth,	-outletPlLength,				plateThickness*0.5),),
-                            ((0.0, 			0.0,							plateThickness*0.5),),
-                            ((plateWidth,	0.0,							plateThickness*0.5),),
-                            ((0.0, 			plateLength,					plateThickness*0.5),),
-                            ((plateWidth, 	plateLength,					plateThickness*0.5),),
-                            ((0.0, 			plateLength + inletPlLength,	plateThickness*0.5),),
-                            ((plateWidth, 	plateLength + inletPlLength,	plateThickness*0.5),))
-	fluid.Set(edges=plateEdges, name='PlateHeight')
-
-	flowWidthEdges = fluidEdges.findAt(
-                        ((plateWidth*0.5, 	-outletPlLength,				0.0),),
-                        ((plateWidth*0.5, 	-outletPlLength,				plateThickness),),
-                        ((plateWidth*0.5, 	-outletPlLength,				-lgChHeight),),
-                        ((plateWidth*0.5, 	-outletPlLength,				smChHeight + plateThickness),),
-                        ((plateWidth*0.5, 	0.0,							0.0),),
-                        ((plateWidth*0.5, 	0.0,							plateThickness),),
-                        ((plateWidth*0.5, 	0.0,							-lgChHeight),),
-                        ((plateWidth*0.5, 	0.0,							smChHeight + plateThickness),),
-                        ((plateWidth*0.5, 	plateLength,					0.0),),
-                        ((plateWidth*0.5, 	plateLength,					plateThickness),),
-                        ((plateWidth*0.5, 	plateLength,					-lgChHeight),),
-                        ((plateWidth*0.5, 	plateLength,					smChHeight + plateThickness),),
-                        ((plateWidth*0.5, 	plateLength + inletPlLength,	0.0),),
-                        ((plateWidth*0.5, 	plateLength + inletPlLength,	plateThickness),),
-                        ((plateWidth*0.5, 	plateLength + inletPlLength,	-lgChHeight),),
-                        ((plateWidth*0.5, 	plateLength + inletPlLength,	smChHeight + plateThickness),))
-	fluid.Set(edges=flowWidthEdges, name='FluidWidth')
+	yPos = [ -outletPlLength,	0.0,			plateLength,	plateLength + inletPlLength ]
+	zPos = [ 0.0,				plateThickness,	-lgChHeight,	smChHeight + plateThickness ]
+	flowPlateEdges = []
+	for i in range(0, numOfPlates+1):
+		for j in range(0, len(yPos)):
+			flowPlateEdges.append(fluidEdges.findAt( ((plateWidth*0.5, yPos[j], -lgChHeight + plateSpacing*i),) ))
+			flowPlateEdges.append(fluidEdges.findAt( ((plateWidth*0.5, yPos[j], plateSpacing*i),) ))
+		fluid.Set(edges=flowPlateEdges, name='FluidWidth')
 
 	# Creating the set of faces for the inlet
+	pos = [ 'Inlet', plateLength + inletPlLength, 
+			'Outlet', -outletPlLength ]
 	fluidFaces = fluid.faces
-	inletFaces = fluidFaces.findAt(
-                            ((plateWidth*0.5,	plateLength + inletPlLength,	plateThickness*0.5),),
-    						((plateWidth*0.5,	plateLength + inletPlLength,	-smChHeight*0.5),),
-                            ((plateWidth*0.5,	plateLength + inletPlLength,	plateThickness + lgChHeight*0.5),))
-	fluid.Surface(side1Faces = inletFaces, name = 'Inlet')
-
-	outletFaces = fluidFaces.findAt(
-                            ((plateWidth*0.5,	-outletPlLength,	plateThickness*0.5),),
-    						((plateWidth*0.5,	-outletPlLength,	-smChHeight*0.5),),
-                            ((plateWidth*0.5,	-outletPlLength,	plateThickness + lgChHeight*0.5),))
-	fluid.Surface(side1Faces = outletFaces, name = 'Outlet')
+	for i in range(0, len(pos)/2):
+		inletFaces = []
+		inletFaces.append(fluidFaces.findAt( ((plateWidth*0.5, pos[(i*2)+1], -lgChHeight*0.5),) ))
+		for j in range(0, numOfPlates+1):
+			inletFaces.append(fluidFaces.findAt( ((plateWidth*0.5, pos[(i*2)+1], plateThickness*0.5 + plateSpacing*j),) ))
+			inletFaces.append(fluidFaces.findAt( ((plateWidth*0.5, pos[(i*2)+1], plateThickness + lgChHeight*0.5 + plateSpacing*j),) ))
+		fluid.Surface(side2Faces = inletFaces, name = pos[(i*2)])
 
 	# Creating the FSI surfaces
-	fsiBack = fluidFaces.findAt(
-                            ((plateWidth*0.5,		plateLength*0.5,	0.0),))
-	fluid.Surface(side1Faces = fsiBack, name = 'FSI_Back')
-
-	fsiFront = fluidFaces.findAt(
-    						((plateWidth*0.5,		plateLength*0.5,	plateThickness),))
-	fluid.Surface(side1Faces = fsiFront, name = 'FSI_Front')
-
-	fsiTop = fluidFaces.findAt(
-                            ((plateWidth*0.5,		plateLength,		plateThickness*0.5),),)
-	fluid.Surface(side1Faces = fsiTop, name = 'FSI_Top')
-
-	fsiBottom = fluidFaces.findAt(
-    						((plateWidth*0.5,		0.0,				plateThickness*0.5),),)
-	fluid.Surface(side1Faces = fsiBottom, name = 'FSI_Bottom')
+	yPos = [ plateLength*0.5, plateLength*0.5, plateLength, 0.0 ]
+	zPos = [ 0.0, plateThickness, plateThickness*0.5, plateThickness*0.5 ]
+	fsiSurfNames = ['FSI_Back', 'FSI_Front', 'FSI_Top', 'FSI_Bottom']
+	for i in range(0, numOfPlates):
+		for j in range(0, len(yPos)):
+			fsiBack = fluidFaces.findAt( ((plateWidth*0.5, yPos[j], zPos[j] + plateSpacing*i),) )
+			fluid.Surface(side1Faces = fsiBack, name = fsiSurfNames[j] + '_' + str(i))
 
 	# Seeding edges of the fluid for meshing
 	fluidPlateLengthEdges = fluid.sets['FluidPlateLength'].edges
@@ -641,9 +614,15 @@ def createFlatFluid(parameters):
 	fluid.generateMesh()
 
 	# Creating a job for input file creation
-	fileName = ( 'Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
-			 '_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
-			 '_' + str(int(parameters['lgChHeight']/0.0254*1000)) )
+	if numOfPlates == 1:
+		fileName = ( 'Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+				 '_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
+				 '_' + str(int(parameters['lgChHeight']/0.0254*1000)) )
+	else:
+		fileName = ( 'Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+				'_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
+				'_' + str(numOfPlates) + '_' + parameters['plateGeometry'] + '_Plate_Stack' )
+
 	inputFileName = createInputFile(fileName,modelName)
 
 def createCurvedPlate(geometryParameters):
@@ -1339,10 +1318,10 @@ def appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep):
     		"**\n",
     		"*CO-SIMULATION, NAME=FSI_Mech, PROGRAM=MULTIPHYSICS, CONTROLS=Control-1\n",
     		"*CO-SIMULATION REGION, TYPE=SURFACE, EXPORT\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, U\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, V\n",
+    		"ASSEMBLY_FSI_INTERFACE, U\n",
+    		"ASSEMBLY_FSI_INTERFACE, V\n",
     		"*CO-SIMULATION REGION, TYPE=SURFACE, IMPORT\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, CF\n",
+    		"ASSEMBLY_FSI_INTERFACE, CF\n",
     		"*CO-SIMULATION CONTROLS, NAME=Control-1, COUPLING SCHEME=" + couplingScheme +", SCHEME MODIFIER=LAG,\n",
     		"STEP SIZE=" + str(timeStep) + ", TIME INCREMENTATION=SUBCYCLE, TIME MARKS=YES\n",
     		"**\n",
@@ -1436,14 +1415,24 @@ print('\n\n The plates geometry and mesh parameters have been read from external
 if parameters['plateGeometry'] == 'Flat':
 	createFlatPlate(parameters)
 	if parameters['saveCAEFiles'] == 'yes':
-		mdb.saveAs('FSI_PlateGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) +
-				'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(int(parameters['lgChHeight']/0.0254*1000)))
+		if parameters['numOfPlates'] == 1:
+			mdb.saveAs('FSI_SolidGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) +
+					'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(int(parameters['lgChHeight']/0.0254*1000)))
+		else:
+			mdb.saveAs('FSI_SolidGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+					'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(parameters['numOfPlates']) +
+					'_' + parameters['plateGeometry'] + '_' + 'Plate_Stack')
 	print('\n\n The Abaqus script has completed building the plate model\n')
 
 	createFlatFluid(parameters)
 	if parameters['saveCAEFiles'] == 'yes':
-		mdb.saveAs('FSI_FluidGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) +
-				'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(int(parameters['lgChHeight']/0.0254*1000)))
+		if parameters['numOfPlates'] == 1:
+			mdb.saveAs('FSI_FluidGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) +
+					'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(int(parameters['lgChHeight']/0.0254*1000)))
+		else:
+			mdb.saveAs('FSI_FluidGeometry_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+					'_' + str(int(parameters['smChHeight']/0.0254*1000)) + '_' + str(parameters['numOfPlates']) +
+					'_' + parameters['plateGeometry'] + '_' + 'Plate_Stack')
 	print('\n\n The Abaqus script has completed building the fluid model\n')
 
 if parameters['plateGeometry'] == 'Curved':
