@@ -188,11 +188,12 @@ public class AbaqusMeshingFSI extends StarMacro
 		String[] fsiSurfaces = new String[numOfPlates*4];
 		for(int i = 0; i < numOfPlates; i++)
 		{
-			fsiSurfaces[i] = "Fluid.FSI_Back_" + i;
-			fsiSurfaces[i+1] = "Fluid.FSI_Front_" + i;
-			fsiSurfaces[i+2] = "Fluid.FSI_Bottom_" + i;
-			fsiSurfaces[i+3] = "Fluid.FSI_Top_" + i;
+			fsiSurfaces[i*4] = "Fluid.FSI_Back_" + i;
+			fsiSurfaces[(i*4)+1] = "Fluid.FSI_Front_" + i;
+			fsiSurfaces[(i*4)+2] = "Fluid.FSI_Bottom_" + i;
+			fsiSurfaces[(i*4)+3] = "Fluid.FSI_Top_" + i;
 		}
+		activeSim.print(fsiSurfaces);
 		abaqus.setCouplingBoundaries(fsiSurfaces);
 		if(numOfPlates == 1)
 		{
@@ -372,8 +373,8 @@ public class AbaqusMeshingFSI extends StarMacro
 		String[] fsiSurfFB = new String[numOfPlates*2];
 		for(int i = 0; i < numOfPlates; i++)
 		{
-			fsiSurfFB[i] = "Fluid.FSI_Back_" + i;
-			fsiSurfFB[i+1] = "Fluid.FSI_Front_" + i;
+			fsiSurfFB[i*2] = "Fluid.FSI_Back_" + i;
+			fsiSurfFB[(i*2)+1] = "Fluid.FSI_Front_" + i;
 		}
 		wallYplusPlot.addObjects2XYPlot(wallYplus_XYPlot, "Fluid", fsiSurfFB);
 				
