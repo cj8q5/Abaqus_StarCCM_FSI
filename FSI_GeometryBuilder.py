@@ -168,18 +168,6 @@ def createFlatPlate(geometryParameters):
 								((plateWidth*0.5,	0.0,			0.0),),
 								((plateWidth*0.5,	0.0,			plateThickness),))
 		plate.Set(vertices = pinVertices, name = 'Pins')
-	
-	# Creating the FSI_INTERFACE surface
-	#fsiFaces = plateFaces.findAt(
-	#                        ((plateWidth*0.25,		plateLength*0.5,	0.0),), 
-	#						((plateWidth*0.25,		plateLength*0.5,	plateThickness),),
-	#                        ((plateWidth*0.25,		0.0,				plateThickness*0.5),),
-    #							((plateWidth*0.25,		plateLength,		plateThickness*0.5),),
-	#                        ((plateWidth*0.75,		plateLength*0.5,	0.0),),
-	#						((plateWidth*0.75,		plateLength*0.5,	plateThickness),),
-	#                       ((plateWidth*0.75,		0.0,				plateThickness*0.5),),
-	#						((plateWidth*0.75,		plateLength,		plateThickness*0.5),))
-	#plate.Surface(side1Faces = fsiFaces, name = 'FSI_INTERFACE')
 
 	# Creating the small and larage channel master surfaces
 	if pinOrCombBC == "comb":
@@ -625,626 +613,568 @@ def createFlatFluid(parameters):
 
 	inputFileName = createInputFile(fileName,modelName)
 
+
 def createCurvedPlate(geometryParameters):
-    """ Creates input files for a curved plate model
-        Inputs:
-        model_name:    Abaqus model name
-        parameters:    model parameters
-        Outputs:
-    """
-    # GRABBING ALL OF THE GEOMETRY PARAMETERS
-    plateName = 'Plate'
-    modelName = parameters['abaqusModelName']
-    plateLength = parameters['plateLength']
-    plateWidth = parameters['plateWidth']
-    plateThickness = parameters['plateThickness']
-    smChHeight = parameters['smChHeight']
-    lgChHeight = parameters['lgChHeight']
-    inletLength = parameters['inletPlLength']
-    outletLength = parameters['outletPlLength']
-    
-    # Grabbing all of the mesh parameters
-    plateThickNodes = parameters['plateThickNodes']
-    plateLengthNodes = parameters['plateLengthNodes']
-    plateWidthNodes = parameters['plateWidthNodes']
-    clampedWidthNodes = parameters['clampedWidthNodes']
-
-    # Grabbing all of the material properties of the plate
-    plateMaterial = parameters['plateMaterial']
-    elasticModulus = parameters['elasticModulus']
-    poissonsRatio = parameters['poissonsRatio']
-    plateDensity = parameters['plateDensity']
-    pinnedBC = parameters['pinnedBC']
-
-    # Grabbing the FSI coupling parameters
-    couplingScheme = parameters['couplingScheme']
-    timeStep = parameters['timeStep']
-    minTimeStep = parameters['minTimeStep']
-    maxSimTime = parameters['maxSimTime']
-    r_in = 4*plateWidth/math.pi
-    r_out = r_in + plateThickness
-    plateTheta = (plateWidth + 0.0254)/r_in
-    wettedTheta = math.pi/4
-    clampedTheta = 0.5*(plateTheta - wettedTheta)
-    emptyTheta = (math.pi/2 - plateTheta)/2
-
-    #    Create Plate Part
-    mdb.Model(name=modelName, modelType = STANDARD_EXPLICIT)
-    plate = mdb.models[modelName].Part(name=plateName, dimensionality=THREE_D, type=DEFORMABLE_BODY )
-
-    plate.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0)
-    plate.DatumAxisByPrincipalAxis(principalAxis=ZAXIS)
-    datumPlanes = plate.datums
-    t = plate.MakeSketchTransform(sketchPlane=datumPlanes[1], origin=(0.0, 0.0, 0.0), 
-                             sketchOrientation=RIGHT, sketchPlaneSide=SIDE1, sketchUpEdge=datumPlanes[2])
-    
-    plateSketch = mdb.models[modelName].ConstrainedSketch(name='__profile__', sheetSize=3.0*plateWidth, 
-                             transform=t)
-							 
-    #    Inner radius:
-    ri = r_in
-    #    Outer radius:
-    ro = ri + plateThickness
-
-    plateOrFluid = 'plate'
-    if plateOrFluid == 'plate':
-		theta = (plateWidth + 0.0254)/ri
-         
-    if plateOrFluid == 'fluid':
-    	theta = math.pi/4
-
-    #    Point 0: Center of radius
-    point0 = (0.0, 0.0)
-    #    Point 1: Inside, left
-    point1 = (-ri*math.sin(math.pi/2 - emptyTheta), ri*math.cos(math.pi/2 - emptyTheta))
-    #    Point 2: Inside, right
-    point2 = (-ri*math.sin(emptyTheta), ri*math.cos(emptyTheta))
-    #    Point 3: Outside, left
-    point3 = (-ro*math.sin(math.pi/2 - emptyTheta), ro*math.cos(math.pi/2 - emptyTheta))
-    #    Point 4: Outside, right
-    point4 = (-ro*math.sin(emptyTheta), ro*math.cos(emptyTheta))
-    #    Draw curved profile
-    g, v, d, c = plateSketch.geometry, plateSketch.vertices, plateSketch.dimensions, plateSketch.constraints
-    plateSketch.setPrimaryObject(option=STANDALONE )
-    plateSketch.ArcByCenterEnds(center=point0, point1=point1, point2=point2, direction=CLOCKWISE)
-    plateSketch.ArcByCenterEnds(center=point0, point1=point3, point2=point4, direction=CLOCKWISE)
-    plateSketch.Line(point1=point1, point2=point3)
-    plateSketch.Line(point1=point2, point2=point4)
-    	
-    plate.BaseSolidExtrude(sketch=plateSketch, depth=plateLength)
-    plateSketch.unsetPrimaryObject()
-    del mdb.models[modelName].sketches['__profile__']
-    plate.regenerate
-    mdb.models[modelName].parts[plateName].setValues(geometryRefinement=EXTRA_FINE)
-    
-    # Creating datum points for the three datum planes
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - clampedTheta - emptyTheta), plateLength, r_in*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), plateLength, r_in*math.sin(emptyTheta + clampedTheta)))
-    plate.DatumPointByCoordinate(coords=(r_out*math.cos(math.pi/2 - clampedTheta - emptyTheta), plateLength, r_out*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
-    plate.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta), plateLength, r_out*math.sin(emptyTheta + clampedTheta)))
-
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - clampedTheta - emptyTheta), 0.0, r_in*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), 0.0, r_in*math.sin(emptyTheta + clampedTheta)))
+	""" Creates input files for a curved plate model
+	    Inputs:
+	    model_name:    Abaqus model name
+	    parameters:    model parameters
+	    Outputs:
+	"""
+	# GRABBING ALL OF THE GEOMETRY PARAMETERS
+	plateName = 'Plate'
+	modelName = parameters['abaqusModelName']
+	plateLength = parameters['plateLength']
+	plateWidth = parameters['plateWidth']
+	plateThickness = parameters['plateThickness']
+	smChHeight = parameters['smChHeight']
+	lgChHeight = parameters['lgChHeight']
+	inletLength = parameters['inletPlLength']
+	outletLength = parameters['outletPlLength']
 	
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), plateLength, r_in*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
-    plate.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), plateLength, r_out*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
-    plate.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), 0.0, r_in*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
-    datumPoints = plate.datums
-    
-    # Creating three datum planes on the plate part
-    plate.DatumPlaneByThreePoints(point1=datumPoints[10], point2=datumPoints[11], point3=datumPoints[12])
-    plate.DatumPlaneByThreePoints(point1=datumPoints[4], point2=datumPoints[6], point3=datumPoints[8])
-    plate.DatumPlaneByThreePoints(point1=datumPoints[5], point2=datumPoints[7], point3=datumPoints[9])
-    
-    # Grabbing the datum planes and the cells of the plate for partitioning the plate
-    plateCells = plate.cells
-    datumPlanes = plate.datums
+	# Grabbing all of the mesh parameters
+	plateThickNodes = parameters['plateThickNodes']
+	plateLengthNodes = parameters['plateLengthNodes']
+	plateWidthNodes = parameters['plateWidthNodes']
+	clampedWidthNodes = parameters['clampedWidthNodes']
 
-    # Creating a set of the entire plate geometry
-    entirePlateGeometry = plateCells.getByBoundingBox(
-                              xMin = -1, yMin = -1, zMin = -1,
-                              xMax = 1, yMax = 1, zMax = 1)
-    plate.Set(cells = entirePlateGeometry, name = 'EntirePlateGeometry')
+	# Grabbing all of the material properties of the plate
+	numOfPlates = parameters['numOfPlates']
+	plateMaterial = parameters['plateMaterial']
+	elasticModulus = parameters['elasticModulus']
+	poissonsRatio = parameters['poissonsRatio']
+	plateDensity = parameters['plateDensity']
+	pinOrCombBC = parameters['pinOrCombBC']
 
-    # Partitioning the plate into three sections, wetted region and clamped regions
-    pickedCells = plateCells.getByBoundingBox(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
-    plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[15], cells=pickedCells)
-    
-    pickedCells = plateCells.findAt(((r_in*math.cos(plateTheta/2), plateLength*0.5, (r_in + (plateThickness*0.5))*math.sin(plateTheta/2),)))
-    plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[13], cells=pickedCells)
-    
-    pickedCells = plateCells.findAt(((r_in*math.cos(plateTheta), plateLength*0.25, (r_in + (plateThickness*0.5))*math.sin(plateTheta),)))
-    plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[14], cells=pickedCells)
-    
-    # Creating all the sets of edges in the plate part
-    plateEdges = plate.edges
-    flowLengthEdges = plateEdges.findAt(
-        ((r_in*math.cos(math.pi/2 - emptyTheta),						plateLength*0.5, 	r_in*math.sin(math.pi/2 - emptyTheta)),),
-        ((r_out*math.cos(math.pi/2 - emptyTheta),						plateLength*0.5,	r_out*math.sin(math.pi/2 - emptyTheta)),),
-        ((r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),			plateLength*0.5,	r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        ((r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength*0.5,	r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	plateLength*0.5,	r_in*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), 	plateLength*0.5,	r_out*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
-        ((r_in*math.cos(emptyTheta + clampedTheta), 					plateLength*0.5,	r_in*math.sin(emptyTheta + clampedTheta)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta), 					plateLength*0.5,	r_out*math.sin(emptyTheta + clampedTheta)),),
-        ((r_in*math.cos(emptyTheta), 									plateLength*0.5,	r_in*math.sin(emptyTheta)),),
-        ((r_out*math.cos(emptyTheta),									plateLength*0.5,	r_out*math.sin(emptyTheta)),),)
-    plate.Set(edges=flowLengthEdges, name='PlateLength')
-    
-    flowWidthEdges = plateEdges.findAt(
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 		plateLength,	r_in*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 	plateLength, 	r_out*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 		plateLength, 	r_in*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 	plateLength, 	r_out*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 		0.0,			r_in*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 	0.0, 			r_out*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 		0.0, 			r_in*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 	0.0, 			r_out*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),))
-    plate.Set(edges=flowWidthEdges, name = 'PlateWidth')
-    
-    plateThicknessEdges = plateEdges.findAt(
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta),						0.0,			(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta)),),
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		0.0,			(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	0.0,			(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta), 					0.0,			(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta), 									0.0,			(r_in + plateThickness/2)*math.sin(emptyTheta)),),
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta),						plateLength,	(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta)),),
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength,	(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	plateLength,	(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta), 					plateLength,	(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta), 									plateLength,	(r_in + plateThickness/2)*math.sin(emptyTheta)),))
-    plate.Set(edges = plateThicknessEdges, name = 'PlateThickness')
-    
-    clampedWidthEdges = plateEdges.findAt(
-        ((r_in*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	plateLength,	r_in*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-        ((r_out*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	plateLength, 	r_out*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-        ((r_in*math.cos(emptyTheta + (clampedTheta/2)), 				plateLength, 	r_in*math.sin(emptyTheta + (clampedTheta/2))),),
-        ((r_out*math.cos(emptyTheta + (clampedTheta/2)),				plateLength, 	r_out*math.sin(emptyTheta + (clampedTheta/2))),),
-        ((r_in*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	0.0,			r_in*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-        ((r_out*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	0.0, 			r_out*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-        ((r_in*math.cos(emptyTheta + (clampedTheta/2)), 				0.0, 			r_in*math.sin(emptyTheta + (clampedTheta/2))),),
-        ((r_out*math.cos(emptyTheta + (clampedTheta/2)),				0.0, 			r_out*math.sin(emptyTheta + (clampedTheta/2))),))
-    plate.Set(edges = clampedWidthEdges, name = 'ClampedWidth')
-    
-    # Creating the set of faces where the plate will be clamped
-    plateFaces = plate.faces
-    clampedFaces = plateFaces.findAt(
-        ((r_in*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)),		plateLength*0.5,	r_in*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-		((r_out*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)),	plateLength*0.5,	r_out*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
-        ((r_in*math.cos(emptyTheta + (clampedTheta/2)),					plateLength*0.5,	r_in*math.sin(emptyTheta + (clampedTheta/2))),),
-		((r_out*math.cos(emptyTheta + (clampedTheta/2)),				plateLength*0.5,	r_out*math.sin(emptyTheta + (clampedTheta/2))),))
-    plate.Set(faces = clampedFaces, name = 'ClampedFaces')
-    
-    # Creating the set of vertices where the plate will be pinned
-    plateVertices = plate.vertices
-    pinVertices = plateVertices.findAt(
-		((r_in*math.cos(math.pi/4),		plateLength,	r_in*math.sin(math.pi/4)),),
-		((r_in*math.cos(math.pi/4),		0.0,			r_in*math.sin(math.pi/4)),),)
-    plate.Set(vertices = pinVertices, name = 'Pins')
-    
-    # Creating the FSI_INTERFACE surface
-    fsiFaces = plateFaces.findAt(
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta/4),							plateLength*0.5,	r_in*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta/4), 						plateLength*0.5, 	r_out*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta/4),	0.0, 				(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta/4),	plateLength, 		(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4), 						plateLength*0.5,	r_in*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4),						plateLength*0.5, 	r_out*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4), 	0.0, 				(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4), 	plateLength, 		(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),)
-    plate.Surface(side1Faces = fsiFaces, name = 'FSI_INTERFACE')
-    
-    # Creating the plate material aluminum
-    mdb.models[modelName].Material(name=plateMaterial)
-    mdb.models[modelName].materials[plateMaterial].Density(table=((plateDensity, ), ))
-    mdb.models[modelName].materials[plateMaterial].Elastic(table=((elasticModulus, poissonsRatio), ))
+	# Grabbing the FSI coupling parameters
+	couplingScheme = parameters['couplingScheme']
+	timeStep = parameters['timeStep']
+	minTimeStep = parameters['minTimeStep']
+	maxSimTime = parameters['maxSimTime']
 
-    # Setting and creating the section assignment for the plate
-    mdb.models[modelName].HomogeneousSolidSection(name='PlateSection', 
-                              material=plateMaterial, thickness=None)
-    plateRegion = plate.sets['EntirePlateGeometry']
-    plate.SectionAssignment(region=plateRegion, sectionName='PlateSection', offset=0.0, 
-        offsetType=MIDDLE_SURFACE, offsetField='', 
-        thicknessAssignment=FROM_SECTION)
-    
-    # Seeding edges of the plate for meshing
-    plateLengthEdges = plate.sets['PlateLength'].edges
-    plate.seedEdgeByNumber(edges = plateLengthEdges, number = plateLengthNodes, constraint = FINER)
-    
-    plateWidthEdges = plate.sets['PlateWidth'].edges
-    plate.seedEdgeByNumber(edges = plateWidthEdges, number = plateWidthNodes, constraint = FINER)
+	plateSpacing = plateThickness + smChHeight
+	mdb.Model(name=modelName, modelType = STANDARD_EXPLICIT)
 
-    plateThicknessEdges = plate.sets['PlateThickness'].edges
-    plate.seedEdgeByNumber(edges = plateThicknessEdges, number = plateThickNodes, constraint = FINER)
+	##------------------------------------------MATERIALS NODE-----------------------------------------------------
+	# Creating the plate material aluminum
+	mdb.models[modelName].Material(name=plateMaterial)
+	mdb.models[modelName].materials[plateMaterial].Density(table=((plateDensity, ), ))
+	mdb.models[modelName].materials[plateMaterial].Elastic(table=((elasticModulus, poissonsRatio), ))
 
-    clampedWidthEdges = plate.sets['ClampedWidth'].edges
-    plate.seedEdgeByNumber(edges = clampedWidthEdges, number = clampedWidthNodes, constraint = FINER)
+	##------------------------------------------SECTIONS NODE-----------------------------------------------------
+	# Setting and creating the section assignment for the plate
+	mdb.models[modelName].HomogeneousSolidSection(name='PlateSection', 
+								material=plateMaterial, thickness=None)
 
-    # Setting the mesh element type and meshing the part
-    elemType = mesh.ElemType(elemCode = C3D8I, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
-                              distortionControl = DEFAULT)
-    plateCellsRegion = plate.sets['EntirePlateGeometry'].cells
-    plate.setElementType(regions = (plateCellsRegion, ), elemTypes = (elemType, ))
-    plate.generateMesh()
+	##--------------------------------------------PARTS NODE-------------------------------------------------------
+	# Building the curved plate stack
+	# Creating a array of the plate's radii
+	r_in = []
+	r_out = []
+	plateArcLen = []
 
-    # Adding the plate as an instance to the assembly
-    assembly = mdb.models[modelName].rootAssembly
-    assembly.Instance(name = plateName, part = plate, dependent = ON)
+	for i in range(0, numOfPlates):
+		if i == 0:
+			r_in.append((4*plateWidth/math.pi)-plateThickness*0.5)
+			r_out.append(r_in[i] + plateThickness)
+			plateArcLen.append(plateWidth)
 
-    # Setting the clamped boundary condition on the clamped regions of the plate
-    clampedRegion = assembly.instances[plateName].sets['ClampedFaces']
-    mdb.models[modelName].PinnedBC(name = 'Clamps', createStepName = 'Initial', 
-                              region = clampedRegion, localCsys = None)
+			wettedTheta = math.pi/4
+			plateTheta = (plateWidth + 0.0254)/r_in[i]
+			clampedTheta = 0.5*(plateTheta - wettedTheta)
+			emptyTheta = (math.pi/2 - plateTheta)/2
+		else:
+			r_in.append(r_in[i-1] - plateSpacing)
+			r_out.append(r_out[i-1] - plateSpacing)
+			plateArcLen.append((r_in[i] + r_out[i])/2*plateTheta)
+		plate = mdb.models[modelName].Part(name=plateName + '_' + str(i), dimensionality=THREE_D, type=DEFORMABLE_BODY )
+		plateSketch = curved_sketch(plate, modelName, r_in[i], emptyTheta, plateThickness, 'Plate')
 
-    # Setting the pins boundary condition on the 'Pins' set
-    if pinnedBC == 'yes':
-    	pinRegion = assembly.instances[plateName].sets['Pins']
-    	mdb.models[modelName].DisplacementBC(name='Pins', 
-    		createStepName='Initial', region=pinRegion, u1=SET, u2=UNSET, u3=SET, 
-    		ur1=UNSET, ur2=UNSET, ur3=UNSET, amplitude=UNSET, 
-    		distributionType=UNIFORM, fieldName='', localCsys=None)
+		plate.BaseSolidExtrude(sketch=plateSketch, depth=plateLength)
+		plateSketch.unsetPrimaryObject()
+		del mdb.models[modelName].sketches['__profile__']
+		plate.regenerate
+		mdb.models[modelName].parts[plateName + '_' + str(i)].setValues(geometryRefinement=EXTRA_FINE)
+	
+		# Creating datum points for the three datum planes
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(math.pi/2 - clampedTheta - emptyTheta), plateLength, r_in[i]*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(emptyTheta + clampedTheta), plateLength, r_in[i]*math.sin(emptyTheta + clampedTheta)))
+		plate.DatumPointByCoordinate(coords=(r_out[i]*math.cos(math.pi/2 - clampedTheta - emptyTheta), plateLength, r_out[i]*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
+		plate.DatumPointByCoordinate(coords=(r_out[i]*math.cos(emptyTheta + clampedTheta), plateLength, r_out[i]*math.sin(emptyTheta + clampedTheta)))
 
-    # Creating and writing the input file to the Abaqus work directory
-    if pinnedBC == 'yes':
-		x = str(int(plateThickness/0.0254*1000)) + '_Pinned'
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(math.pi/2 - clampedTheta - emptyTheta), 0.0, r_in[i]*math.sin(math.pi/2 - clampedTheta - emptyTheta)))
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(emptyTheta + clampedTheta), 0.0, r_in[i]*math.sin(emptyTheta + clampedTheta)))
+	
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), plateLength, r_in[i]*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
+		plate.DatumPointByCoordinate(coords=(r_out[i]*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), plateLength, r_out[i]*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
+		plate.DatumPointByCoordinate(coords=(r_in[i]*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), 0.0, r_in[i]*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))))
+		datumPoints = plate.datums
 
-    if pinnedBC == 'no':
-		x = str(int(plateThickness/0.0254*1000)) + '_Free'
-		
-    mdb.Job(name=couplingScheme + '_' + x + 'Plate', model=modelName, description='', type=ANALYSIS, 
-    atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90, 
-    memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True, 
-    explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF, 
-    modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='', 
-    scratch='', parallelizationMethodExplicit=DOMAIN, numDomains=1, 
-    activateLoadBalancing=False, multiprocessingMode=DEFAULT, numCpus=1)
-    mdb.jobs[couplingScheme + '_' + x + 'Plate'].writeInput(consistencyChecking=OFF)
+		# Creating three datum planes on the plate part
+		plate.DatumPlaneByThreePoints(point1=datumPoints[10], point2=datumPoints[11], point3=datumPoints[12])
+		plate.DatumPlaneByThreePoints(point1=datumPoints[4], point2=datumPoints[6], point3=datumPoints[8])
+		plate.DatumPlaneByThreePoints(point1=datumPoints[5], point2=datumPoints[7], point3=datumPoints[9])
 
-    # Appending the written input file for explicit FSI coupling
-    with open(couplingScheme + "_" + x + "Plate.inp", "a") as inputFile:
-    	if couplingScheme == 'Explicit':
-    		couplingScheme = 'GAUSS-SEIDEL'
-    	elif couplingScheme == 'Implicit':
-    		couplingScheme = 'ITERATIVE'
+		# Grabbing the datum planes and the cells of the plate for partitioning the plate
+		plateCells = plate.cells
+		datumPlanes = plate.datums
 
-    	inputFileLines = [
-    		"** ----------------------------------------------------------------\n",
-    		"**\n",
-    		"** STEP: FSI\n",
-    		"**\n",
-    		"*Step, name=FSI, nlgeom=YES, inc=1000000\n",
-    		"*Dynamic,application=QUASI-STATIC\n",
-    		"" + str(timeStep) + "," + str(maxSimTime) + "," + str(minTimeStep) + "," + str(timeStep) + "\n",
-    		"**\n",
-    		"** OUTPUT REQUESTS\n",
-    		"**\n",
-    		"**\n",
-    		"** FIELD OUTPUT: F-Output-1\n",
-    		"**\n",
-    		"*Output, field, variable=PRESELECT, frequency=1\n",
-    		"**\n",
-    		"** HISTORY OUTPUT: H-Output-1\n",
-    		"**\n",
-    		"*Output, history, variable=PRESELECT\n",
-    		"**\n",
-    		"*CO-SIMULATION, NAME=FSI_Mech, PROGRAM=MULTIPHYSICS, CONTROLS=Control-1\n",
-    		"*CO-SIMULATION REGION, TYPE=SURFACE, EXPORT\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, U\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, V\n",
-    		"*CO-SIMULATION REGION, TYPE=SURFACE, IMPORT\n",
-    		"ASSEMBLY_PLATE_FSI_INTERFACE, CF\n",
-    		"*CO-SIMULATION CONTROLS, NAME=Control-1, COUPLING SCHEME=" + couplingScheme +", SCHEME MODIFIER=LAG,\n",
-    		"STEP SIZE=" + str(timeStep) + ", TIME INCREMENTATION=SUBCYCLE, TIME MARKS=YES\n",
-    		"**\n",
-    		"*End Step\n"]			
-    	inputFile.writelines(inputFileLines)
-    inputFile.close()
+		# Creating a set of the entire plate geometry
+		entirePlateGeometry = plateCells.getByBoundingBox(
+									xMin = -1, yMin = -1, zMin = -1,
+									xMax = 1, yMax = 1, zMax = 1)
+		plate.Set(cells = entirePlateGeometry, name = 'EntirePlateGeometry')
+
+		# Partitioning the plate into three sections, wetted region and clamped regions
+		pickedCells = plateCells.getByBoundingBox(-1.0, -1.0, -1.0, 1.0, 1.0, 1.0)
+		plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[15], cells=pickedCells)
+			    
+		pickedCells = plateCells.findAt(((r_in[i]*math.cos(plateTheta/2), plateLength*0.5, (r_in[i] + (plateThickness*0.5))*math.sin(plateTheta/2),)))
+		plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[13], cells=pickedCells)
+			    
+		pickedCells = plateCells.findAt(((r_in[i]*math.cos(plateTheta), plateLength*0.25, (r_in[i] + (plateThickness*0.5))*math.sin(plateTheta),)))
+		plate.PartitionCellByDatumPlane(datumPlane=datumPlanes[14], cells=pickedCells)
+			    
+		# Creating all the sets of edges in the plate part
+		plateEdges = plate.edges
+		flowLengthEdges = plateEdges.findAt(
+			((r_in[i]*math.cos(math.pi/2 - emptyTheta),							plateLength*0.5, 	r_in[i]*math.sin(math.pi/2 - emptyTheta)),),
+			((r_out[i]*math.cos(math.pi/2 - emptyTheta),						plateLength*0.5,	r_out[i]*math.sin(math.pi/2 - emptyTheta)),),
+			((r_in[i]*math.cos(math.pi/2 - emptyTheta - clampedTheta),			plateLength*0.5,	r_in[i]*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
+			((r_out[i]*math.cos(math.pi/2 - emptyTheta - clampedTheta),			plateLength*0.5,	r_out[i]*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	plateLength*0.5,	r_in[i]*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)), 	plateLength*0.5,	r_out[i]*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta), 						plateLength*0.5,	r_in[i]*math.sin(emptyTheta + clampedTheta)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta), 					plateLength*0.5,	r_out[i]*math.sin(emptyTheta + clampedTheta)),),
+			((r_in[i]*math.cos(emptyTheta), 									plateLength*0.5,	r_in[i]*math.sin(emptyTheta)),),
+			((r_out[i]*math.cos(emptyTheta),									plateLength*0.5,	r_out[i]*math.sin(emptyTheta)),),)
+		plate.Set(edges=flowLengthEdges, name='PlateLength')
+			    
+		flowWidthEdges = plateEdges.findAt(
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 		plateLength,	r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 	plateLength, 	r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 		plateLength, 	r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 	plateLength, 	r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 		0.0,			r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.75), 	0.0, 			r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.75)),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 		0.0, 			r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*0.25), 	0.0, 			r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*0.25)),))
+		plate.Set(edges=flowWidthEdges, name = 'PlateWidth')
+			    
+		plateThicknessEdges = plateEdges.findAt(
+			(((r_in[i] + plateThickness/2)*math.cos(math.pi/2 - emptyTheta),						0.0,			(r_in[i] + plateThickness/2)*math.sin(math.pi/2 - emptyTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),			0.0,			(r_in[i] + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	0.0,			(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta), 					0.0,			(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta), 									0.0,			(r_in[i] + plateThickness/2)*math.sin(emptyTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(math.pi/2 - emptyTheta),						plateLength,	(r_in[i] + plateThickness/2)*math.sin(math.pi/2 - emptyTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),			plateLength,	(r_in[i] + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + (wettedTheta/2)),	plateLength,	(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + (wettedTheta/2))),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta), 					plateLength,	(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta), 									plateLength,	(r_in[i] + plateThickness/2)*math.sin(emptyTheta)),))
+		plate.Set(edges = plateThicknessEdges, name = 'PlateThickness')
+			    
+		clampedWidthEdges = plateEdges.findAt(
+			((r_in[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	plateLength,	r_in[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_out[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), plateLength, 	r_out[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_in[i]*math.cos(emptyTheta + (clampedTheta/2)), 				plateLength, 	r_in[i]*math.sin(emptyTheta + (clampedTheta/2))),),
+			((r_out[i]*math.cos(emptyTheta + (clampedTheta/2)),				plateLength, 	r_out[i]*math.sin(emptyTheta + (clampedTheta/2))),),
+			((r_in[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 	0.0,			r_in[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_out[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)), 0.0, 			r_out[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_in[i]*math.cos(emptyTheta + (clampedTheta/2)), 				0.0, 			r_in[i]*math.sin(emptyTheta + (clampedTheta/2))),),
+			((r_out[i]*math.cos(emptyTheta + (clampedTheta/2)),				0.0, 			r_out[i]*math.sin(emptyTheta + (clampedTheta/2))),))
+		plate.Set(edges = clampedWidthEdges, name = 'ClampedWidth')
+			    
+		# Creating the set of faces where the plate will be clamped
+		plateFaces = plate.faces
+		clampedFaces = plateFaces.findAt(
+			((r_in[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)),	plateLength*0.5,	r_in[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_out[i]*math.cos(math.pi/2 - emptyTheta - (clampedTheta/2)),	plateLength*0.5,	r_out[i]*math.sin(math.pi/2 - emptyTheta - (clampedTheta/2))),),
+			((r_in[i]*math.cos(emptyTheta + (clampedTheta/2)),				plateLength*0.5,	r_in[i]*math.sin(emptyTheta + (clampedTheta/2))),),
+			((r_out[i]*math.cos(emptyTheta + (clampedTheta/2)),				plateLength*0.5,	r_out[i]*math.sin(emptyTheta + (clampedTheta/2))),))
+		plate.Set(faces = clampedFaces, name = 'ClampedFaces')
+			    
+		# Creating the set of vertices where the plate will be pinned
+		plateVertices = plate.vertices
+		pinVertices = plateVertices.findAt(
+			((r_in[i]*math.cos(math.pi/4),		plateLength,	r_in[i]*math.sin(math.pi/4)),),
+			((r_in[i]*math.cos(math.pi/4),		0.0,			r_in[i]*math.sin(math.pi/4)),),)
+		plate.Set(vertices = pinVertices, name = 'Pins')
+
+		# Creating the FSI_INTERFACE surface
+		fsiFaces = plateFaces.findAt(
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta/4),							plateLength*0.5,	r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta/4), 						plateLength*0.5, 	r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta/4),		0.0, 				(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta/4),		plateLength, 		(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta/4)),),
+			((r_in[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4), 						plateLength*0.5,	r_in[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
+			((r_out[i]*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4),						plateLength*0.5, 	r_out[i]*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4),	0.0, 				(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),
+			(((r_in[i] + plateThickness/2)*math.cos(emptyTheta + clampedTheta + wettedTheta*3/4), 	plateLength, 		(r_in[i] + plateThickness/2)*math.sin(emptyTheta + clampedTheta + wettedTheta*3/4)),),)
+		plate.Surface(side1Faces = fsiFaces, name = 'FSI_INTERFACE')
+			    
+		# Setting the section and materal of the plate
+		plateRegion = plate.sets['EntirePlateGeometry']
+		plate.SectionAssignment(region=plateRegion, sectionName='PlateSection', offset=0.0, 
+			offsetType=MIDDLE_SURFACE, offsetField='', 
+			thicknessAssignment=FROM_SECTION)
+
+		##--------------------------------------------MESH NODE-------------------------------------------------------
+		# Seeding edges of the plate for meshing
+		plateLengthEdges = plate.sets['PlateLength'].edges
+
+		plate.seedEdgeByNumber(edges = plateLengthEdges, number = plateLengthNodes, constraint = FINER)
+		plateWidthEdges = plate.sets['PlateWidth'].edges
+		plate.seedEdgeByNumber(edges = plateWidthEdges, number = plateWidthNodes, constraint = FINER)
+
+		plateThicknessEdges = plate.sets['PlateThickness'].edges
+		plate.seedEdgeByNumber(edges = plateThicknessEdges, number = plateThickNodes, constraint = FINER)
+
+		clampedWidthEdges = plate.sets['ClampedWidth'].edges
+		plate.seedEdgeByNumber(edges = clampedWidthEdges, number = clampedWidthNodes, constraint = FINER)
+
+		# Setting the mesh element type and meshing the part
+		elemType = mesh.ElemType(elemCode = C3D8I, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
+									distortionControl = DEFAULT)
+		plateCellsRegion = plate.sets['EntirePlateGeometry'].cells
+		plate.setElementType(regions = (plateCellsRegion, ), elemTypes = (elemType, ))
+		plate.generateMesh()
+
+		# Adding the plate as an instance to the assembly
+		assembly = mdb.models[modelName].rootAssembly
+		assembly.Instance(name = plateName + '_' + str(i), part = plate, dependent = ON)
+
+		# Setting the clamped boundary condition on the clamped regions of the plate
+		clampedRegion = assembly.instances[plateName + '_' + str(i)].sets['ClampedFaces']
+		mdb.models[modelName].PinnedBC(name = 'Clamps', createStepName = 'Initial', 
+									region = clampedRegion, localCsys = None)
+
+		# Setting the pins boundary condition on the 'Pins' set
+		if pinOrCombBC == 'pin':
+			pinRegion = assembly.instances[plateName + '_' + str(i)].sets['Pins']
+			mdb.models[modelName].DisplacementBC(name='Pins', 
+    			createStepName='Initial', region=pinRegion, u1=SET, u2=UNSET, u3=SET, 
+    			ur1=UNSET, ur2=UNSET, ur3=UNSET, amplitude=UNSET, 
+    			distributionType=UNIFORM, fieldName='', localCsys=None)
+
+	##-------------------------------------------JOBS NODE-------------------------------------------------------
+	# Creating and writing the input file to the Abaqus work directory
+	if pinOrCombBC == 'pin':
+		BC = str(int(plateThickness/0.0254*1000)) + '_Pinned'
+
+	elif pinOrCombBC == 'comb':
+		BC = str(int(plateThickness/0.0254*1000)) + '_Combed'
+
+	elif pinOrCombBC == 'none':
+		BC = str(int(plateThickness/0.0254*1000)) + '_Free'
+
+	# Creating the job for creating and appending the input file
+	fileName = couplingScheme + '_' + BC + 'Plate'
+	createInputFile(fileName, modelName)
+
+	# Appending the written input file for explicit FSI coupling
+	appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
 
 def createCurvedFluid(parameters):
-    modelName = parameters['abaqusModelName']
-    plateName = 'Plate'
-    fluidName = 'Fluid'
-    # Grabbing all of the geometry variables for the fluid model
-    plateLength = parameters['plateLength']
-    plateWidth = parameters['plateWidth']
-    plateThickness = parameters['plateThickness']
-    inletPlLength = parameters['inletPlLength']
-    outletPlLength = parameters['outletPlLength']
-    smChHeight = parameters['smChHeight']
-    lgChHeight = parameters['lgChHeight']
+	modelName = parameters['abaqusModelName']
+	plateName = 'Plate'
+	fluidName = 'Fluid'
+	# Grabbing all of the geometry variables for the fluid model
+	numOfPlates = parameters['numOfPlates']
+	plateLength = parameters['plateLength']
+	plateWidth = parameters['plateWidth']
+	plateThickness = parameters['plateThickness']
+	inletPlLength = parameters['inletPlLength']
+	outletPlLength = parameters['outletPlLength']
+	smChHeight = parameters['smChHeight']
+	lgChHeight = parameters['lgChHeight']
 
-    # Grabbing all of the fluid mesh variables for the fluid model
-    flPlLenNodes = parameters['flPlLenNodes']
-    flPlLenBias = parameters['flPlLenBias']
-    flPlWidthNodes = parameters['flPlWidthNodes']
-    flPlWidthBias = parameters['flPlWidthBias']
-    flInletNodes = parameters['flInletNodes']
-    flInletBias = parameters['flInletBias']
-    flOutletNodes = parameters['flOutletNodes']
-    flOutletBias = parameters['flOutletBias']
-    flSmChHeightNodes = parameters['flSmChHeightNodes']
-    flSmChHeightBias = parameters['flSmChHeightBias']
-    flLgChHeightNodes = parameters['flLgChHeightNodes']
-    flLgChHeightBias = parameters['flLgChHeightBias']
-    flPlHeightNodes = parameters['flPlHeightNodes']
-    flPlHeightBias = parameters['flPlHeightBias']
-    biasDirection = parameters['chBiasDirection']
+	# Grabbing all of the fluid mesh variables for the fluid model
+	flPlLenNodes = parameters['flPlLenNodes']
+	flPlLenBias = parameters['flPlLenBias']
+	flPlWidthNodes = parameters['flPlWidthNodes']
+	flPlWidthBias = parameters['flPlWidthBias']
+	flInletNodes = parameters['flInletNodes']
+	flInletBias = parameters['flInletBias']
+	flOutletNodes = parameters['flOutletNodes']
+	flOutletBias = parameters['flOutletBias']
+	flSmChHeightNodes = parameters['flSmChHeightNodes']
+	flSmChHeightBias = parameters['flSmChHeightBias']
+	flLgChHeightNodes = parameters['flLgChHeightNodes']
+	flLgChHeightBias = parameters['flLgChHeightBias']
+	flPlHeightNodes = parameters['flPlHeightNodes']
+	flPlHeightBias = parameters['flPlHeightBias']
+	biasDirection = parameters['chBiasDirection']
 
-    r_in = plateWidth/(math.pi/4)
-    r_out = r_in + plateThickness
-    plateTheta = (plateWidth + 0.0254)/r_in
-    wettedTheta = math.pi/4
-    clampedTheta = 0.5*(plateTheta - wettedTheta)
-    emptyTheta = (math.pi/2 - plateTheta)/2
+	plateSpacing = smChHeight + plateThickness
+	fluidThickness = plateSpacing*numOfPlates + smChHeight
+	r_in = plateWidth/(math.pi/4) - plateThickness/2 - smChHeight - plateSpacing*(numOfPlates-1)
+	r_out = r_in + fluidThickness
+	plateTheta = (plateWidth + 0.0254)/r_in
+	wettedTheta = math.pi/4
+	clampedTheta = 0.5*(plateTheta - wettedTheta)
+	emptyTheta = (math.pi/2 - plateTheta)/2
+	    
+	# Creating part named 'BulkFluid'
+	bulkFluid = mdb.models[modelName].Part(name='BulkFluid', dimensionality=THREE_D, type=DEFORMABLE_BODY)
+	bulkFluid = mdb.models[modelName].parts['BulkFluid']
 
-    r_lgCh = r_in - lgChHeight
+	bulkFluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0)
+	bulkFluid.DatumAxisByPrincipalAxis(principalAxis=ZAXIS)
+	datumPlanes = bulkFluid.datums
+	t = bulkFluid.MakeSketchTransform(sketchPlane=datumPlanes[1], origin=(0.0, 0.0, 0.0), 
+								sketchOrientation=RIGHT, sketchPlaneSide=SIDE1, sketchUpEdge=datumPlanes[2])
+
+	bulkFluidSketch = mdb.models[modelName].ConstrainedSketch(name='__profile__', sheetSize=2.0, 
+								transform=t)
+	
+	bulkFluidSketch = curved_sketch(bulkFluid, modelName, r_in, emptyTheta, fluidThickness, 'Fluid')  
+
+	bulkFluid.BaseSolidExtrude(sketch=bulkFluidSketch, depth=(inletPlLength + plateLength + outletPlLength))
+	bulkFluidSketch.unsetPrimaryObject()
+	del mdb.models[modelName].sketches['__profile__']
+	bulkFluid.regenerate
+	mdb.models[modelName].parts['BulkFluid'].setValues(geometryRefinement=EXTRA_FINE)
+
+	# Adding the bulk fluid as an instance to the assembly
+	assembly = mdb.models[modelName].rootAssembly
+	assembly.Instance(name = 'BulkFluid', part = bulkFluid, dependent = ON)
+
+	# Translating the bulkFluid part the height of the large channel 
+	assembly.translate(instanceList=('BulkFluid', ), vector=(0.0, -outletPlLength, 0.0))
+
+	# Cutting the plate instance from the bulkFluid instance to create the Fluid part
+	plates = []
+	for i in range(0, numOfPlates):
+		plates.append(assembly.instances[plateName + '_' + str(i)])
+
+	assembly.InstanceFromBooleanCut(name=fluidName, 
+		instanceToBeCut=assembly.instances['BulkFluid'], 
+		cuttingInstances=(plates),
+		originalInstances=SUPPRESS)
+	assembly.features.changeKey( fromName = 'Fluid-1', toName = fluidName )
+	mdb.models[modelName].parts[fluidName].setValues(geometryRefinement=EXTRA_FINE)
+	    
+	# Creating the datum points for creating the two datum planes
+	fluid = mdb.models[modelName].parts[fluidName]
+	fluid.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength, r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), 					plateLength, r_in*math.sin(emptyTheta + clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta), 	plateLength, r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta),					plateLength, r_out*math.sin(emptyTheta + clampedTheta)))
+	    
+	fluid.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),		0.0, 		r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), 					0.0, 		r_in*math.sin(emptyTheta + clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta), 	0.0, 		r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
+	fluid.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta),					0.0, 		r_out*math.sin(emptyTheta + clampedTheta)))
+	datumPoints = fluid.datums
+	    
+	# Creating three datum planes on the fluid part
+	fluid.DatumPlaneByThreePoints(point1=datumPoints[2], point2=datumPoints[3], point3=datumPoints[4])
+	fluid.DatumPlaneByThreePoints(point1=datumPoints[6], point2=datumPoints[7], point3=datumPoints[8])
+
+	# Grabbing the datum planes and the cells of the fluid for partitioning the fluid
+	fluidCells = fluid.cells
+	datumPlanes = fluid.datums
+
+	# Creating a set of the entire plate geometry
+	entireFluidGeometry = fluidCells.getByBoundingBox(
+								xMin = -1, yMin = -1, zMin = -1,
+								xMax = 1, yMax = 1, zMax = 1)
+	fluid.Set(cells = entireFluidGeometry, name = 'EntireFluidGeometry')
+
+	# Partitioning the plate into three sections, wetted region and clamped regions
+	pickedCells = fluid.sets['EntireFluidGeometry'].cells
+	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[10], cells=pickedCells)
+
+	pickedCells = fluid.sets['EntireFluidGeometry'].cells
+	fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[11], cells=pickedCells)
+	    
+	# Creating all the sets of edges in the fluid part
+	halfPlateLength = plateLength*0.5
+	cos_0 = math.cos(math.pi/2 - emptyTheta - clampedTheta)
+	cos_1 = math.cos(emptyTheta + clampedTheta)
+	sin_0 = math.sin(math.pi/2 - emptyTheta - clampedTheta)
+	sin_1 = math.sin(emptyTheta + clampedTheta)
+	r_i = []
+	r_o = []
+	flowPlateLengthEdges = []
+	plateEdges = []
+	smChannelEdges = []
+	lgChannelEdges = []
+	fluidEdges = fluid.edges
+	for i in range(0, numOfPlates+1):
+		if i == 0:
+			r_i.append(plateWidth/(math.pi/4) - plateThickness/2 - smChHeight - plateSpacing*(numOfPlates-1))
+			r_o.append(r_i[i] + plateThickness + smChHeight + lgChHeight)
+		else:
+			r_i.append(r_i[i-1] + plateSpacing)
+			r_o.append(r_o[i-1] + plateSpacing)
+
+		r_plFlow = (r_i[i] + lgChHeight)
+		flowPlateLengthEdges.append( fluidEdges.findAt(
+			((r_i[i]*cos_0,		halfPlateLength,	r_i[i]*sin_0),),
+			((r_i[i]*cos_1,		halfPlateLength,	r_i[i]*sin_1),),
+			((r_plFlow*cos_0,	halfPlateLength,	r_plFlow*sin_0),),
+			((r_plFlow*cos_1,	halfPlateLength,	r_plFlow*sin_1),),) )
+
+		r_plateEdges = r_i[i] + plateThickness/2 + lgChHeight
+		plateEdges.append( fluidEdges.findAt(
+			((r_plateEdges*cos_0,	plateLength,	r_plateEdges*sin_0),),
+			((r_plateEdges*cos_1,	plateLength,	r_plateEdges*sin_1),),
+			((r_plateEdges*cos_0,	0.0,			r_plateEdges*sin_0),),
+			((r_plateEdges*cos_1,	0.0,			r_plateEdges*sin_1),),) )
+
+		if i % 2 == 0:
+			r_lgChEdges = r_i[i] + lgChHeight/2 + plateThickness
+			lgChannelEdges.append( fluidEdges.findAt(
+				((r_lgChEdges*cos_0,	plateLength,	r_lgChEdges*sin_0),),
+				((r_lgChEdges*cos_1,	plateLength,	r_lgChEdges*sin_1),),
+				((r_lgChEdges*cos_0,	0.0,			r_lgChEdges*sin_0),),
+				((r_lgChEdges*cos_1,	0.0,			r_lgChEdges*sin_1),),) )
+
+		else:
+			r_smChEdges = r_i[i] + smChHeight/2
+			smChannelEdges.append( fluidEdges.findAt(
+				((r_smChEdges*cos_0,	plateLength,	r_smChEdges*sin_0),),
+				((r_smChEdges*cos_1,	plateLength,	r_smChEdges*sin_1),),
+				((r_smChEdges*cos_0,	0.0,			r_smChEdges*sin_0),),
+				((r_smChEdges*cos_1,	0.0,			r_smChEdges*sin_1),),) )
+
+	fluid.Set(edges=flowPlateLengthEdges, name='FluidPlateLength')
+	fluid.Set(edges=lgChannelEdges, name='LargeChHeight')
+	fluid.Set(edges=smChannelEdges, name='SmallChHeight')
+	fluid.Set(edges=plateEdges, name='PlateHeight')
+			   
+	halfOutletLength = outletPlLength*0.5 
+	flowOutletLengthEdges = fluidEdges.findAt(
+		((r_in*cos_0,	-halfOutletLength,	r_in*sin_0),),
+		((r_in*cos_1,	-halfOutletLength,	r_in*sin_1),),
+		((r_out*cos_0,	-halfOutletLength,	r_out*sin_0),),
+		((r_out*cos_1,	-halfOutletLength,	r_out*sin_1),),)
+	fluid.Set(edges=flowOutletLengthEdges, name='FluidOutletLength')
+	
+	halfInletPlateLength = plateLength + inletPlLength*0.5
+	flowInletLengthEdges = fluidEdges.findAt(
+		((r_in*cos_0,	halfInletPlateLength,	r_in*sin_0),),
+		((r_in*cos_1,	halfInletPlateLength,	r_in*sin_1),),
+		((r_out*cos_0,	halfInletPlateLength,	r_out*sin_0),),
+		((r_out*cos_1,	halfInletPlateLength,	r_out*sin_1),),)
+	fluid.Set(edges=flowInletLengthEdges, name='FluidInletLength')
+
+	r_inOut = r_in + plateThickness/2
+	inOutEdges = fluidEdges.findAt(
+		((r_inOut*cos_0,	plateLength + inletPlLength,	r_inOut*sin_0),),
+		((r_inOut*cos_1,	plateLength + inletPlLength,	r_inOut*sin_1),),
+		((r_inOut*cos_0,	-outletPlLength,				r_inOut*sin_0),),
+		((r_inOut*cos_1,	-outletPlLength,				r_inOut*sin_1),),)
+	fluid.Set(edges=inOutEdges, name='InletOutletHeight')
+	    
+	flowWidthEdges = fluidEdges.findAt(
+		(((r_in - lgChHeight)*math.cos(math.pi/4), 					-outletPlLength,				(r_in - lgChHeight)*math.sin(math.pi/4)),),
+		(((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), -outletPlLength,				(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
+		((r_in*math.cos(math.pi/4), 								0.0,							r_in*math.sin(math.pi/4)),),
+		(((r_in + plateThickness)*math.cos(math.pi/4), 				0.0,							(r_in + plateThickness)*math.sin(math.pi/4)),),
+		(((r_in - lgChHeight)*math.cos(math.pi/4), 					0.0,							(r_in - lgChHeight)*math.sin(math.pi/4)),),
+		(((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), 0.0,							(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
+		((r_in*math.cos(math.pi/4), 								plateLength,					r_in*math.sin(math.pi/4)),),
+		(((r_in + plateThickness)*math.cos(math.pi/4), 				plateLength,					(r_in + plateThickness)*math.sin(math.pi/4)),),
+		(((r_in - lgChHeight)*math.cos(math.pi/4), 					plateLength,					(r_in - lgChHeight)*math.sin(math.pi/4)),),
+		(((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), plateLength,					(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
+		(((r_in - lgChHeight)*math.cos(math.pi/4), 					plateLength + inletPlLength,	(r_in - lgChHeight)*math.sin(math.pi/4)),),
+		(((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), plateLength + inletPlLength,	(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),))
+	fluid.Set(edges=flowWidthEdges, name='FluidWidth')
+	    
+	## Creating the set of faces for the inlet
+	#fluidFaces = fluid.faces
+	#inletFaces = fluidFaces.findAt(
+	#	(((r_in + (plateThickness)*0.5)*math.cos(math.pi/4),		plateLength + inletPlLength,	(r_in + (plateThickness + smChHeight + lgChHeight)*0.5)*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = inletFaces, name = 'Inlet')
+	    
+	#outletFaces = fluidFaces.findAt(
+	#	(((r_in + (plateThickness)*0.5)*math.cos(math.pi/4),		-outletPlLength,				(r_in + (plateThickness + smChHeight + lgChHeight)*0.5)*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = outletFaces, name = 'Outlet')
+
+	## Creating the FSI surfaces
+	#fsiBack = fluidFaces.findAt(
+	#	((r_in*math.cos(math.pi/4),									plateLength*0.5,	r_in*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = fsiBack, name = 'FSI_Back')
     
-    # Creating part named 'BulkFluid'
-    bulkFluid = mdb.models[modelName].Part(name='BulkFluid', dimensionality=THREE_D, type=DEFORMABLE_BODY)
-    bulkFluid = mdb.models[modelName].parts['BulkFluid']
+	#fsiFront = fluidFaces.findAt(
+	#	(((r_in + plateThickness)*math.cos(math.pi/4),				plateLength*0.5,	(r_in + plateThickness)*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = fsiFront, name = 'FSI_Front')
 
-    bulkFluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0)
-    bulkFluid.DatumAxisByPrincipalAxis(principalAxis=ZAXIS)
-    datumPlanes = bulkFluid.datums
-    t = bulkFluid.MakeSketchTransform(sketchPlane=datumPlanes[1], origin=(0.0, 0.0, 0.0), 
-                             sketchOrientation=RIGHT, sketchPlaneSide=SIDE1, sketchUpEdge=datumPlanes[2])
-    
-    bulkFluidSketch = mdb.models[modelName].ConstrainedSketch(name='__profile__', sheetSize=2.0, 
-                             transform=t)
-    
-	#    Inner radius:
-    ri = r_lgCh
-    #    Outer radius:
-    ro = ri + plateThickness + smChHeight + lgChHeight
+	#fsiTop = fluidFaces.findAt(
+	#	(((r_in + (plateThickness*0.5))*math.cos(math.pi/4),		plateLength,		(r_in + (plateThickness*0.5))*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = fsiTop, name = 'FSI_Top')
 
-    plateOrFluid = 'fluid'
-    if plateOrFluid == 'plate':
-    	theta = (plateWidth + 0.0254)/ri
-         
-    if plateOrFluid == 'fluid':
-    	theta = math.pi/4
-    	plateTheta = (plateWidth + 0.0254)/(plateWidth/(math.pi/4))
-    	clampedTheta = 0.5*(plateTheta - theta)
-    	#    sine and cosine factors
-    	#cos = math.cos(theta)
-    	#sin = math.sin(theta)
-    	#    Point 0: Center of radius
-    	point0 = (0.0, 0.0)
-    	#    Point 1: Inside, left
-    	point1 = (-ri*sin(math.pi/2 - emptyTheta - clampedTheta), ri*cos(math.pi/2 - emptyTheta - clampedTheta))
-    	#    Point 2: Inside, right
-    	point2 = (-ri*sin(emptyTheta + clampedTheta), ri*cos(emptyTheta + clampedTheta))
-    	#    Point 3: Outside, left
-    	point3 = (-ro*sin(math.pi/2 - emptyTheta - clampedTheta), ro*cos(math.pi/2 - emptyTheta - clampedTheta))
-    	#    Point 4: Outside, right
-    	point4 = (-ro*sin(emptyTheta + clampedTheta), ro*cos(emptyTheta + clampedTheta))
+	#fsiBottom = fluidFaces.findAt(
+	#	(((r_in + (plateThickness*0.5))*math.cos(math.pi/4),		0.0,				(r_in + (plateThickness*0.5))*math.sin(math.pi/4)),),)
+	#fluid.Surface(side1Faces = fsiBottom, name = 'FSI_Bottom')
 
-    #    Draw curved profile
-    g, v, d, c = bulkFluidSketch.geometry, bulkFluidSketch.vertices, bulkFluidSketch.dimensions, bulkFluidSketch.constraints
-    bulkFluidSketch.setPrimaryObject(option=STANDALONE )
-    bulkFluidSketch.ArcByCenterEnds(center=point0, point1=point1, point2=point2, direction=CLOCKWISE)
-    bulkFluidSketch.ArcByCenterEnds(center=point0, point1=point3, point2=point4, direction=CLOCKWISE)
-    bulkFluidSketch.Line(point1=point1, point2=point3)
-    bulkFluidSketch.Line(point1=point2, point2=point4)
-    
-	#curved_sketch(bulkFluidSketch, r_lgCh, plateWidth, plateThickness + smChHeight + lgChHeight, 'fluid')
+	## Seeding edges of the fluid for meshing
+	#fluidPlateLengthEdges = fluid.sets['FluidPlateLength'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidPlateLengthEdges, ratio=flPlLenBias,
+	#	number=flPlLenNodes, constraint=FINER)
 
-    bulkFluid.BaseSolidExtrude(sketch=bulkFluidSketch, depth=(inletPlLength + plateLength + outletPlLength))
-    bulkFluidSketch.unsetPrimaryObject()
-    del mdb.models[modelName].sketches['__profile__']
-    bulkFluid.regenerate
-    mdb.models[modelName].parts['BulkFluid'].setValues(geometryRefinement=EXTRA_FINE)
+	#fluidWidthEdges = fluid.sets['FluidWidth'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidWidthEdges, ratio=flPlWidthBias,
+	#	number=flPlWidthNodes, constraint=FINER)
 
-    # Adding the bulk fluid as an instance to the assembly
-    assembly = mdb.models[modelName].rootAssembly
-    assembly.Instance(name = 'BulkFluid', part = bulkFluid, dependent = ON)
+	#fluidOutletEdges = fluid.sets['FluidOutletLength'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidOutletEdges, ratio=flOutletBias,
+	#	number=flOutletNodes, constraint=FINER)
 
-    # Translating the bulkFluid part the height of the large channel 
-    assembly.translate(instanceList=('BulkFluid', ), vector=(0.0, -outletPlLength, 0.0))
+	#fluidInletEdges = fluid.sets['FluidInletLength'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidInletEdges, ratio=flInletBias,
+	#	number=flInletNodes, constraint=FINER)
 
-    # Cutting the plate instance from the bulkFluid instance to create the Fluid part
-    assembly.InstanceFromBooleanCut(name=fluidName, 
-        instanceToBeCut=assembly.instances['BulkFluid'], 
-        cuttingInstances=(assembly.instances[plateName], ),
-        originalInstances=SUPPRESS)
-    assembly.features.changeKey( fromName = 'Fluid-1', toName = 'Fluid' )
-    mdb.models[modelName].parts[fluidName].setValues(geometryRefinement=EXTRA_FINE)
-    
-    # Creating the datum points for creating the four datum planes
-    fluid = mdb.models[modelName].parts[fluidName]
-    fluid.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength, r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), 					plateLength, r_in*math.sin(emptyTheta + clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta), 	plateLength, r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta),					plateLength, r_out*math.sin(emptyTheta + clampedTheta)))
-    
-    fluid.DatumPointByCoordinate(coords=(r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),		0.0, 		r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_in*math.cos(emptyTheta + clampedTheta), 					0.0, 		r_in*math.sin(emptyTheta + clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta), 	0.0, 		r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)))
-    fluid.DatumPointByCoordinate(coords=(r_out*math.cos(emptyTheta + clampedTheta),					0.0, 		r_out*math.sin(emptyTheta + clampedTheta)))
-    datumPoints = fluid.datums
-    
-    # Creating three datum planes on the fluid part
-    fluid.DatumPlaneByThreePoints(point1=datumPoints[2], point2=datumPoints[3], point3=datumPoints[4])
-    fluid.DatumPlaneByThreePoints(point1=datumPoints[6], point2=datumPoints[7], point3=datumPoints[8])
+	#fluidSmallChEdges = fluid.sets['SmallChHeight'].edges
+	#if biasDirection == 'Center':
+	#	fluid.seedEdgeByBias(biasMethod=DOUBLE, centerEdges=fluidSmallChEdges, ratio=flSmChHeightBias,
+ #   		number=flSmChHeightNodes, constraint=FINER)
+	#elif biasDirection == 'End':
+	#	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidSmallChEdges, ratio=flSmChHeightBias,
+ #   		number=flSmChHeightNodes, constraint=FINER)
 
-    # Grabbing the datum planes and the cells of the fluid for partitioning the fluid
-    fluidCells = fluid.cells
-    datumPlanes = fluid.datums
+	#fluidLargeChEdges = fluid.sets['LargeChHeight'].edges
+	#if biasDirection == 'Center':
+	#	fluid.seedEdgeByBias(biasMethod=DOUBLE, centerEdges=fluidLargeChEdges, ratio=flLgChHeightBias,
+ #   		number=flLgChHeightNodes, constraint=FINER)
+	#elif biasDirection == 'End':
+	#	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidLargeChEdges, ratio=flLgChHeightBias,
+ #   		number=flLgChHeightNodes, constraint=FINER)
 
-    # Creating a set of the entire plate geometry
-    entireFluidGeometry = fluidCells.getByBoundingBox(
-                              xMin = -1, yMin = -1, zMin = -1,
-                              xMax = 1, yMax = 1, zMax = 1)
-    fluid.Set(cells = entireFluidGeometry, name = 'EntireFluidGeometry')
+	#fluidPlateEdges = fluid.sets['PlateHeight'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidPlateEdges, ratio=flPlHeightBias,
+	#	number=flPlHeightNodes, constraint=FINER)
 
-    # Partitioning the plate into three sections, wetted region and clamped regions
-    pickedCells = fluid.sets['EntireFluidGeometry'].cells
-    fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[10], cells=pickedCells)
+	#fluidInletOutletEdges = fluid.sets['InletOutletHeight'].edges
+	#fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidInletOutletEdges, ratio=flPlHeightBias,
+	#	number=flPlHeightNodes + flLgChHeightNodes + flSmChHeightNodes, constraint=FINER)
 
-    pickedCells = fluid.sets['EntireFluidGeometry'].cells
-    fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[11], cells=pickedCells)
-    
-    # Creating all the sets of edges in the fluid part
-    fluidEdges = fluid.edges
-    flowPlateLengthEdges = fluidEdges.findAt(
-        ((r_in*math.cos(math.pi/2 - emptyTheta - clampedTheta),										plateLength*0.5,	r_in*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        ((r_out*math.cos(math.pi/2 - emptyTheta - clampedTheta), 									plateLength*0.5,	r_out*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        ((r_in*math.cos(emptyTheta + clampedTheta), 												plateLength*0.5,	r_in*math.sin(emptyTheta + clampedTheta)),),
-        ((r_out*math.cos(emptyTheta + clampedTheta),												plateLength*0.5,	r_out*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(emptyTheta + clampedTheta),					plateLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/2 - emptyTheta - clampedTheta),						plateLength*0.5,	(r_in - lgChHeight)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(emptyTheta + clampedTheta),									plateLength*0.5,	(r_in - lgChHeight)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=flowPlateLengthEdges, name='FluidPlateLength')
-    
-    flowOutletLengthEdges = fluidEdges.findAt(
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	-outletPlLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(emptyTheta + clampedTheta),				-outletPlLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/2 - emptyTheta - clampedTheta),					-outletPlLength*0.5,	(r_in - lgChHeight)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(emptyTheta + clampedTheta),								-outletPlLength*0.5,	(r_in - lgChHeight)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=flowOutletLengthEdges, name='FluidOutletLength')
-    
-    flowInletLengthEdges = fluidEdges.findAt(
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	plateLength + inletPlLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(emptyTheta + clampedTheta),				plateLength + inletPlLength*0.5,	(r_in + smChHeight + plateThickness)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/2 - emptyTheta - clampedTheta),					plateLength + inletPlLength*0.5,	(r_in - lgChHeight)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in - lgChHeight)*math.cos(emptyTheta + clampedTheta),								plateLength + inletPlLength*0.5,	(r_in - lgChHeight)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=flowInletLengthEdges, name='FluidInletLength')
-    
-    smChannelEdges = fluidEdges.findAt(
-        (((r_in + smChHeight/2 + plateThickness)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength,	(r_in + smChHeight/2 + plateThickness)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + smChHeight/2 + plateThickness)*math.cos(emptyTheta + clampedTheta),	plateLength,	(r_in + smChHeight/2 + plateThickness)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + smChHeight/2 + plateThickness)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		0.0,			(r_in + smChHeight/2 + plateThickness)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + smChHeight/2 + plateThickness)*math.cos(emptyTheta + clampedTheta),					0.0,			(r_in + smChHeight/2 + plateThickness)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=smChannelEdges, name='SmallChHeight')
-    
-    lgChannelEdges = fluidEdges.findAt(
-        (((r_in - lgChHeight/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		plateLength,	(r_in - lgChHeight/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in - lgChHeight/2)*math.cos(emptyTheta + clampedTheta),					plateLength,	(r_in - lgChHeight/2)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in - lgChHeight/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),		0.0,			(r_in - lgChHeight/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in - lgChHeight/2)*math.cos(emptyTheta + clampedTheta),					0.0,			(r_in - lgChHeight/2)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=lgChannelEdges, name='LargeChHeight')
+	## Setting the mesh element type and meshing the part
+	#elemType = mesh.ElemType(elemCode = C3D8I, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
+	#							distortionControl = DEFAULT)
+	#fluidCellsRegion = fluid.sets['EntireFluidGeometry'].cells
+	#fluid.setElementType(regions = (fluidCellsRegion, ), elemTypes = (elemType, ))
+	#fluid.generateMesh()
 
-    plateEdges = fluidEdges.findAt(
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	plateLength,	(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta),				plateLength,	(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	0.0,			(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta),				0.0,			(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=plateEdges, name='PlateHeight')
+	## Creating a job for input file creation
+	#mdb.Job(name='Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+	#	'_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
+	#	'_' + str(int(parameters['lgChHeight']/0.0254*1000)),
+	#	model=modelName, description='', type=ANALYSIS, 
+	#	atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90, 
+	#	memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True, 
+	#	explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF, 
+	#	modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='', 
+	#	scratch='', parallelizationMethodExplicit=DOMAIN, numDomains=1, 
+	#	activateLoadBalancing=False, multiprocessingMode=DEFAULT, numCpus=1)
 
-    inOutEdges = fluidEdges.findAt(
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	plateLength + inletPlLength,	(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta),				plateLength + inletPlLength,	(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(math.pi/2 - emptyTheta - clampedTheta),	-outletPlLength,				(r_in + plateThickness/2)*math.sin(math.pi/2 - emptyTheta - clampedTheta)),),
-        (((r_in + plateThickness/2)*math.cos(emptyTheta + clampedTheta),				-outletPlLength,				(r_in + plateThickness/2)*math.sin(emptyTheta + clampedTheta)),),)
-    fluid.Set(edges=inOutEdges, name='InletOutletHeight')
-    
-    flowWidthEdges = fluidEdges.findAt(
-        (((r_in - lgChHeight)*math.cos(math.pi/4), 					-outletPlLength,				(r_in - lgChHeight)*math.sin(math.pi/4)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), -outletPlLength,				(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
-        ((r_in*math.cos(math.pi/4), 								0.0,							r_in*math.sin(math.pi/4)),),
-        (((r_in + plateThickness)*math.cos(math.pi/4), 				0.0,							(r_in + plateThickness)*math.sin(math.pi/4)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/4), 					0.0,							(r_in - lgChHeight)*math.sin(math.pi/4)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), 0.0,							(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
-        ((r_in*math.cos(math.pi/4), 								plateLength,					r_in*math.sin(math.pi/4)),),
-        (((r_in + plateThickness)*math.cos(math.pi/4), 				plateLength,					(r_in + plateThickness)*math.sin(math.pi/4)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/4), 					plateLength,					(r_in - lgChHeight)*math.sin(math.pi/4)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), plateLength,					(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),),
-        (((r_in - lgChHeight)*math.cos(math.pi/4), 					plateLength + inletPlLength,	(r_in - lgChHeight)*math.sin(math.pi/4)),),
-        (((r_in + smChHeight + plateThickness)*math.cos(math.pi/4), plateLength + inletPlLength,	(r_in + smChHeight + plateThickness)*math.sin(math.pi/4)),))
-    fluid.Set(edges=flowWidthEdges, name='FluidWidth')
-    
-    # Creating the set of faces for the inlet
-    fluidFaces = fluid.faces
-    inletFaces = fluidFaces.findAt(
-        (((r_in + (plateThickness)*0.5)*math.cos(math.pi/4),		plateLength + inletPlLength,	(r_in + (plateThickness + smChHeight + lgChHeight)*0.5)*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = inletFaces, name = 'Inlet')
-    
-    outletFaces = fluidFaces.findAt(
-        (((r_in + (plateThickness)*0.5)*math.cos(math.pi/4),		-outletPlLength,				(r_in + (plateThickness + smChHeight + lgChHeight)*0.5)*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = outletFaces, name = 'Outlet')
-
-    # Creating the FSI surfaces
-    fsiBack = fluidFaces.findAt(
-        ((r_in*math.cos(math.pi/4),									plateLength*0.5,	r_in*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = fsiBack, name = 'FSI_Back')
-    
-    fsiFront = fluidFaces.findAt(
-        (((r_in + plateThickness)*math.cos(math.pi/4),				plateLength*0.5,	(r_in + plateThickness)*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = fsiFront, name = 'FSI_Front')
-
-    fsiTop = fluidFaces.findAt(
-        (((r_in + (plateThickness*0.5))*math.cos(math.pi/4),		plateLength,		(r_in + (plateThickness*0.5))*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = fsiTop, name = 'FSI_Top')
-
-    fsiBottom = fluidFaces.findAt(
-        (((r_in + (plateThickness*0.5))*math.cos(math.pi/4),		0.0,				(r_in + (plateThickness*0.5))*math.sin(math.pi/4)),),)
-    fluid.Surface(side1Faces = fsiBottom, name = 'FSI_Bottom')
-
-    # Seeding edges of the fluid for meshing
-    fluidPlateLengthEdges = fluid.sets['FluidPlateLength'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidPlateLengthEdges, ratio=flPlLenBias,
-        number=flPlLenNodes, constraint=FINER)
-
-    fluidWidthEdges = fluid.sets['FluidWidth'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidWidthEdges, ratio=flPlWidthBias,
-        number=flPlWidthNodes, constraint=FINER)
-
-    fluidOutletEdges = fluid.sets['FluidOutletLength'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidOutletEdges, ratio=flOutletBias,
-        number=flOutletNodes, constraint=FINER)
-
-    fluidInletEdges = fluid.sets['FluidInletLength'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidInletEdges, ratio=flInletBias,
-        number=flInletNodes, constraint=FINER)
-
-    fluidSmallChEdges = fluid.sets['SmallChHeight'].edges
-    if biasDirection == 'Center':
-    	fluid.seedEdgeByBias(biasMethod=DOUBLE, centerEdges=fluidSmallChEdges, ratio=flSmChHeightBias,
-    		number=flSmChHeightNodes, constraint=FINER)
-    elif biasDirection == 'End':
-    	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidSmallChEdges, ratio=flSmChHeightBias,
-    		number=flSmChHeightNodes, constraint=FINER)
-
-    fluidLargeChEdges = fluid.sets['LargeChHeight'].edges
-    if biasDirection == 'Center':
-    	fluid.seedEdgeByBias(biasMethod=DOUBLE, centerEdges=fluidLargeChEdges, ratio=flLgChHeightBias,
-    		number=flLgChHeightNodes, constraint=FINER)
-    elif biasDirection == 'End':
-    	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidLargeChEdges, ratio=flLgChHeightBias,
-    		number=flLgChHeightNodes, constraint=FINER)
-
-    fluidPlateEdges = fluid.sets['PlateHeight'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidPlateEdges, ratio=flPlHeightBias,
-        number=flPlHeightNodes, constraint=FINER)
-
-    fluidInletOutletEdges = fluid.sets['InletOutletHeight'].edges
-    fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidInletOutletEdges, ratio=flPlHeightBias,
-        number=flPlHeightNodes + flLgChHeightNodes + flSmChHeightNodes, constraint=FINER)
-
-    # Setting the mesh element type and meshing the part
-    elemType = mesh.ElemType(elemCode = C3D8I, elemLibrary = STANDARD, secondOrderAccuracy = OFF,
-                              distortionControl = DEFAULT)
-    fluidCellsRegion = fluid.sets['EntireFluidGeometry'].cells
-    fluid.setElementType(regions = (fluidCellsRegion, ), elemTypes = (elemType, ))
-    fluid.generateMesh()
-
-    # Creating a job for input file creation
-    mdb.Job(name='Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
-        '_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
-        '_' + str(int(parameters['lgChHeight']/0.0254*1000)),
-        model=modelName, description='', type=ANALYSIS, 
-        atTime=None, waitMinutes=0, waitHours=0, queue=None, memory=90, 
-        memoryUnits=PERCENTAGE, getMemoryFromAnalysis=True, 
-        explicitPrecision=SINGLE, nodalOutputPrecision=SINGLE, echoPrint=OFF, 
-        modelPrint=OFF, contactPrint=OFF, historyPrint=OFF, userSubroutine='', 
-        scratch='', parallelizationMethodExplicit=DOMAIN, numDomains=1, 
-        activateLoadBalancing=False, multiprocessingMode=DEFAULT, numCpus=1)
-
-    # Writing the input file to the Abaqus work directory
-    mdb.jobs['Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
-        '_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
-        '_' + str(int(parameters['lgChHeight']/0.0254*1000))].writeInput(consistencyChecking=OFF)
+	## Writing the input file to the Abaqus work directory
+	#mdb.jobs['Star_Fluid_' + str(int(parameters['plateThickness']/0.0254*1000)) + 
+	#	'_' + str(int(parameters['smChHeight']/0.0254*1000)) + 
+	#	'_' + str(int(parameters['lgChHeight']/0.0254*1000))].writeInput(consistencyChecking=OFF)
 
 def createBox(modelName, boxName, size):
     pt1 = size[0]
@@ -1329,60 +1259,50 @@ def appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep):
 		inputFile.writelines(inputFileLines)
 	inputFile.close()
 
-def curved_sketch(s, innerRadius, plateWidth, thickness, plateOrFluid):
-    """ Creates a sketch of the plate cross section
-        Inputs:
-        s:            Constrained sketch part
-        width:      Plate width on the inner radius
-        thickness:      Plate thickness
-        plateOrFluid:	'plate' for plate part and 'fluid' for fluid part
-        Outputs:
-        s:            Completed constrained sketch
-    """
-    #    Inner radius:
-    ri = innerRadius
-    #    Outer radius:
-    ro = ri + thickness
+def curved_sketch(part, modelName, r_in, emptyTheta, plateThickness, plateOrFluid):
+	part.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0)
+	part.DatumAxisByPrincipalAxis(principalAxis=ZAXIS)
+	datumPlanes = part.datums
+	t = part.MakeSketchTransform(sketchPlane=datumPlanes[1], origin=(0.0, 0.0, 0.0), 
+								sketchOrientation=RIGHT, sketchPlaneSide=SIDE1, sketchUpEdge=datumPlanes[2])
+	    
+	plateSketch = mdb.models[modelName].ConstrainedSketch(name='__profile__', sheetSize=3.0*r_in*(math.pi/2 - emptyTheta), transform=t)
+							 
+	#    Inner radius:
+	ri = r_in
+	#    Outer radius:
+	ro = ri + plateThickness
 
-    if plateOrFluid == 'plate':
-		theta = (plateWidth + 0.0254)/ri
-		#    sine and cosine factors
-		cos = math.cos(theta)
-		sin = math.sin(theta)
-		#    Point 0: Center of radius
-		point0 = (0.0, 0.0)
+	#    Point 0: Center of radius
+	point0 = (0.0, 0.0)
+	if plateOrFluid == 'Plate':
 		#    Point 1: Inside, left
-		point1 = (0, ri)
+		point1 = (-ri*math.sin(math.pi/2 - emptyTheta), ri*math.cos(math.pi/2 - emptyTheta))
 		#    Point 2: Inside, right
-		point2 = (-ri*sin, ri*cos)
+		point2 = (-ri*math.sin(emptyTheta), ri*math.cos(emptyTheta))
 		#    Point 3: Outside, left
-		point3 = (0, ro)
+		point3 = (-ro*math.sin(math.pi/2 - emptyTheta), ro*math.cos(math.pi/2 - emptyTheta))
 		#    Point 4: Outside, right
-		point4 = (-ro*sin, ro*cos)
-         
-    if plateOrFluid == 'fluid':
-    	theta = math.pi/4
-    	plateTheta = (plateWidth + 0.0254)/(plateWidth/(math.pi/4))
-    	clampedTheta = 0.5*(plateTheta - theta)
-    	#    Point 0: Center of radius
-    	point0 = (0.0, 0.0)
-    	#    Point 1: Inside, left
-    	point1 = (-ri*math.sin(clampedTheta), ri*math.cos(clampedTheta))
-    	#    Point 2: Inside, right
-    	point2 = (-ri*math.sin(plateTheta - clampedTheta), ri*math.cos(plateTheta - clampedTheta))
-    	#    Point 3: Outside, left
-    	point3 = (-ro*math.sin(clampedTheta), ro*math.cos(clampedTheta))
-    	#    Point 4: Outside, right
-    	point4 = (-ro*math.sin(plateTheta - clampedTheta), ro*math.cos(plateTheta - clampedTheta))
-
-    #    Draw curved profile
-    g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
-    s.setPrimaryObject(option=STANDALONE )
-    s.ArcByCenterEnds(center=point0, point1=point2, point2=point1, direction=CLOCKWISE)
-    s.ArcByCenterEnds(center=point0, point1=point4, point2=point3, direction=CLOCKWISE)
-    s.Line(point1=point1, point2=point3)
-    s.Line(point1=point2, point2=point4)
-    return s
+		point4 = (-ro*math.sin(emptyTheta), ro*math.cos(emptyTheta))
+	elif plateOrFluid == 'Fluid':
+		plateTheta = math.pi/2 - 2*emptyTheta
+		clampedTheta = 0.5*(plateTheta - math.pi/4)
+		#    Point 1: Inside, left
+		point1 = (-ri*sin(math.pi/2 - emptyTheta - clampedTheta), ri*cos(math.pi/2 - emptyTheta - clampedTheta))
+		#    Point 2: Inside, right
+		point2 = (-ri*sin(emptyTheta + clampedTheta), ri*cos(emptyTheta + clampedTheta))
+		#    Point 3: Outside, left
+		point3 = (-ro*sin(math.pi/2 - emptyTheta - clampedTheta), ro*cos(math.pi/2 - emptyTheta - clampedTheta))
+		#    Point 4: Outside, right
+		point4 = (-ro*sin(emptyTheta + clampedTheta), ro*cos(emptyTheta + clampedTheta))
+	#    Draw curved profile
+	g, v, d, c = plateSketch.geometry, plateSketch.vertices, plateSketch.dimensions, plateSketch.constraints
+	plateSketch.setPrimaryObject(option=STANDALONE )
+	plateSketch.ArcByCenterEnds(center=point0, point1=point1, point2=point2, direction=CLOCKWISE)
+	plateSketch.ArcByCenterEnds(center=point0, point1=point3, point2=point4, direction=CLOCKWISE)
+	plateSketch.Line(point1=point1, point2=point3)
+	plateSketch.Line(point1=point2, point2=point4)
+	return plateSketch
 
 def fileReader(fileName):
     parameters = {}

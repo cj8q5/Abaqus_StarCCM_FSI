@@ -445,7 +445,7 @@ public class AbaqusMeshingFSI extends StarMacro
 			saveLocation = currentDirectory + File.separator + 
 					"FSI_" + (int)Math.abs(initialVel[1]) + "_" + plateGeometry + '_' +
 					(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
-					"_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack" +".sim";
+					"_" + numOfPlates + "_Plate_Stack" +".sim";
 		}
 		activeSim.saveState(saveLocation);
 		AbaqusCoSimulation coSim = (AbaqusCoSimulation) activeSim.get(CoSimulationManager.class).getCoSimulation("Abaqus Co-Simulation 1");
