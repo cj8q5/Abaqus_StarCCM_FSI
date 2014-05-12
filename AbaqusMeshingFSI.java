@@ -97,39 +97,40 @@ public class AbaqusMeshingFSI extends StarMacro
 		
 		// Grabbing the geometry parameters
 		double plateLength = reader.getDoubleData("plateLength");
-		double plateHeight = reader.getDoubleData("plateThickness");
+		double plateThickness = reader.getDoubleData("plateThickness");
 		double wettedPlateWidth = reader.getDoubleData("plateWidth");
-		double smallChannelHeight = reader.getDoubleData("smChHeight");
-		double largeChannelHeight = reader.getDoubleData("lgChHeight");
+		double smChHeight = reader.getDoubleData("smChHeight");
+		double lgChHeight = reader.getDoubleData("lgChHeight");
 		double inletLength = reader.getDoubleData("inletPlLength");
 		double outletLength = reader.getDoubleData("outletPlLength");
 		double avgChVel = reader.getDoubleData("avgChVelocity");
 		
 		double r_in = wettedPlateWidth/(Math.PI/4);
+		double plateSpacing = smChHeight + plateThickness;
 		
 		double[] initialVel = {0.0, -avgChVel, 0.0};
 		double inletVel;
 		if(numOfPlates == 1)
 		{
-			inletVel = Math.abs( (smallChannelHeight + largeChannelHeight)/(smallChannelHeight + largeChannelHeight + plateHeight)*avgChVel );		
+			inletVel = Math.abs( (smChHeight + lgChHeight)/(smChHeight + lgChHeight + plateThickness)*avgChVel );		
 		}
 		else
 		{
-			inletVel = Math.abs( (smallChannelHeight*(numOfPlates+1)/(smallChannelHeight*(numOfPlates+1) + plateHeight*numOfPlates))*avgChVel );
+			inletVel = Math.abs( (smChHeight*(numOfPlates+1)/(smChHeight*(numOfPlates+1) + plateThickness*numOfPlates))*avgChVel );
 		}
 		String abaqusInputFilePath = null;
 		//String abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_PinnedPlate.inp";;
 		if(pinOrCombBC.equals("pin"))
 		{
-			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateHeight/0.0254*1000) + "_PinnedPlate.inp";
+			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateThickness/0.0254*1000) + "_PinnedPlate.inp";
 		}
 		if(pinOrCombBC.equals("comb"))
 		{
-			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateHeight/0.0254*1000) + "_CombedPlate.inp";
+			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateThickness/0.0254*1000) + "_CombedPlate.inp";
 		}
 		else if(pinOrCombBC.equals("none"))
 		{
-			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateHeight/0.0254*1000) + "_FreePlate.inp";
+			abaqusInputFilePath = currentDirectory + File.separator + couplingScheme + "_" + (int)(plateThickness/0.0254*1000) + "_FreePlate.inp";
 		}	
 		
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -139,12 +140,12 @@ public class AbaqusMeshingFSI extends StarMacro
 		String abqFileName;
 		if(numOfPlates == 1)
 		{
-			abqFileName = "Star_Fluid_" + (int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
-					"_" + (int)(largeChannelHeight/0.0254*1000);
+			abqFileName = "Star_Fluid_" + (int)(plateThickness/0.0254*1000) + "_" + (int)(smChHeight/0.0254*1000) + 
+					"_" + (int)(lgChHeight/0.0254*1000);
 		}
 		else
 		{
-			abqFileName = "Star_Fluid_" + (int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
+			abqFileName = "Star_Fluid_" + (int)(plateThickness/0.0254*1000) + "_" + (int)(smChHeight/0.0254*1000) + 
 					"_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack";
 		}
 		//String inputFileLocation = resolvePath(fileLocation + abqFileName);
@@ -204,13 +205,13 @@ public class AbaqusMeshingFSI extends StarMacro
 		abaqus.setCouplingBoundaries(fsiSurfaces);
 		if(numOfPlates == 1)
 		{
-			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateHeight/0.0254*1000) +
-					"_" + (int)(smallChannelHeight/0.0254*1000) + "_" + (int)(largeChannelHeight/0.0254*1000), abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateThickness/0.0254*1000) +
+					"_" + (int)(smChHeight/0.0254*1000) + "_" + (int)(lgChHeight/0.0254*1000), abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
 		}
 		else
 		{
-			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateHeight/0.0254*1000) + 
-					"_" + (int)(smallChannelHeight/0.0254*1000) + "_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack",
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateThickness/0.0254*1000) + 
+					"_" + (int)(smChHeight/0.0254*1000) + "_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack",
 					abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
 		}
 		abaqus.abaqusCouplingAlgorithm(couplingScheme, "Star Leads", couplingTimeStep);
@@ -321,6 +322,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 			DERIVED PARTS NODE */
+		FieldFunctions fieldFunction = new FieldFunctions(activeSim);
 		DerivedParts centerPlane = new DerivedParts(activeSim, new String[] {"Fluid"});
 		if(plateGeometry.equals("Flat"))
 		{
@@ -332,46 +334,83 @@ public class AbaqusMeshingFSI extends StarMacro
 		}
 		
 		// Creating line probes throughout the model for plotting the pressure profile through the entire model
+		// Creating an XY plot of the pressure profiles throughout the model
+		ReportsMonitorsPlots pressureProfilePlot = new ReportsMonitorsPlots(activeSim);
+		XYPlot pressureProfile_XYPlot = pressureProfilePlot.createXYPlot(new double[] {0, 1, 0}, "PressureProfiles", "Static Pressure (Pa)");
+		fieldFunction.setXYPlotFieldFunction(pressureProfile_XYPlot, "StaticPressure", "0");
+		
 		String[] lineProbeRegions = {"Fluid"};
 		DerivedParts smChLineProbe = new DerivedParts(activeSim, lineProbeRegions);
 		LinePart smChLinePart = null;
 		LinePart lgChLinePart = null;
 		DerivedParts lgChLineProbe = new DerivedParts(activeSim, lineProbeRegions);
-		if(plateGeometry.equals("Flat"))
-		{		
-			double[] lgChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, -largeChannelHeight*0.5};
-			double[] lgChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, -(largeChannelHeight*0.5)};
-			smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
-			
-			double[] smChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, smallChannelHeight*0.5 + plateHeight};
-			double[] smChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, smallChannelHeight*0.5 + plateHeight};
-			lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+		if(numOfPlates == 1)
+		{
+			if(plateGeometry.equals("Flat"))
+			{		
+				double[] lgChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, -lgChHeight*0.5};
+				double[] lgChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, -(lgChHeight*0.5)};
+				smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
+				pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
+				
+				double[] smChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, smChHeight*0.5 + plateThickness};
+				double[] smChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, smChHeight*0.5 + plateThickness};
+				lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+				pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
+			}
+			else if(plateGeometry.equals("Curved"))
+			{		
+				double[] lgChLineProbeCoord_0 = {(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in - lgChHeight*0.5)*Math.cos(Math.PI/4)};
+				double[] lgChLineProbeCoord_1 = {r_in*Math.cos(Math.PI/4), plateLength + inletLength, r_in*Math.cos(Math.PI/4)};
+				smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
+				pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
+				
+				double[] smChLineProbeCoord_0 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
+				double[] smChLineProbeCoord_1 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4), plateLength + inletLength, (r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
+				lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+				pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
+			}
 		}
-		else if(plateGeometry.equals("Curved"))
-		{		
-			double[] lgChLineProbeCoord_0 = {(r_in - largeChannelHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in - largeChannelHeight*0.5)*Math.cos(Math.PI/4)};
-			double[] lgChLineProbeCoord_1 = {r_in*Math.cos(Math.PI/4), plateLength + inletLength, r_in*Math.cos(Math.PI/4)};
-			smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
-			
-			double[] smChLineProbeCoord_0 = {(r_in + plateHeight + smallChannelHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in + plateHeight + smallChannelHeight*0.5)*Math.cos(Math.PI/4)};
-			double[] smChLineProbeCoord_1 = {(r_in + plateHeight + smallChannelHeight*0.5)*Math.cos(Math.PI/4), plateLength + inletLength, (r_in + plateHeight + smallChannelHeight*0.5)*Math.cos(Math.PI/4)};
-			lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+		else if(numOfPlates > 1)
+		{
+			double cos_mid = Math.cos(Math.PI/4);
+			r_in = wettedPlateWidth/(Math.PI/4) - plateThickness/2 - numOfPlates*plateSpacing;
+			for(int i = 0; i < numOfPlates+1; i++)
+			{
+				if(plateGeometry.equals("Flat"))
+				{		
+					double[] lineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, -lgChHeight*0.5 + plateSpacing*i};
+					double[] lineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, -lgChHeight*0.5 + plateSpacing*i};
+					smChLinePart = smChLineProbe.createLineProbe(lineProbeCoord_0, lineProbeCoord_1, 255, "LineProbe_" + i);
+					pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
+				}
+				else if(plateGeometry.equals("Curved"))
+				{		
+					if(i == 0)
+					{
+						double r = r_in + lgChHeight/2;
+						double[] lineProbeCoord_0 = {r*cos_mid, -outletLength, r*cos_mid};
+						double[] lineProbeCoord_1 = {r*cos_mid, plateLength + inletLength, r*cos_mid};
+						smChLinePart = smChLineProbe.createLineProbe(lineProbeCoord_0, lineProbeCoord_1, 255, "LineProbe_" + i);
+						pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
+					}
+					else
+					{
+						double r = r_in + lgChHeight/2 + plateSpacing*i;
+						double[] lineProbeCoord_0 = {r*cos_mid, -outletLength, r*cos_mid};
+						double[] lineProbeCoord_1 = {r*cos_mid, plateLength + inletLength, r*cos_mid};
+						smChLinePart = smChLineProbe.createLineProbe(lineProbeCoord_0, lineProbeCoord_1, 255, "LineProbe_" + i);
+						pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
+					}
+				}
+			}
 		}
 		
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 		 	PLOTS NODE */
-		FieldFunctions fieldFunction = new FieldFunctions(activeSim);
-		
 		// Turning off the "Auto" normalization option for all the residual monitors
 		ReportsMonitorsPlots reportsMonitorsPlots = new ReportsMonitorsPlots(activeSim);
 		reportsMonitorsPlots.residualNormalization(new String[] {"Continuity", "Tdr", "Tke", "X-momentum", "Y-momentum", "Z-momentum"});
-		
-		// Creating an XY plot of the pressure profiles throughout the model
-		ReportsMonitorsPlots pressureProfilePlot = new ReportsMonitorsPlots(activeSim);
-		XYPlot pressureProfile_XYPlot = pressureProfilePlot.createXYPlot(new double[] {0, 1, 0}, "PressureProfiles", "Static Pressure (Pa)");
-		fieldFunction.setXYPlotFieldFunction(pressureProfile_XYPlot, "StaticPressure", "0");
-		pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
-		pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
 		
 		// Creating an XY plot of the plate's wall y+ values
 		ReportsMonitorsPlots wallYplusPlot = new ReportsMonitorsPlots(activeSim);
@@ -412,7 +451,7 @@ public class AbaqusMeshingFSI extends StarMacro
 			SOLUTION HISTORY NODE */
 			/*
 		String simhFileLocation =  currentDirectory + File.separator + couplingScheme + "_FSI_" + (int)Math.abs(initialVel[1]) + "_StarCCM_" + 
-				(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + "_" + (int)(largeChannelHeight/0.0254*1000) + 
+				(int)(plateThickness/0.0254*1000) + "_" + (int)(smChHeight/0.0254*1000) + "_" + (int)(lgChHeight/0.0254*1000) + 
 				"SolutionHistory.simh";
 		String[] scalarFieldFunctions = {"StaticPressure", "Volume"};
 		String[] vectorFieldFunctions = {"NodalDisplacement", "Morpher Displacement"};
@@ -437,14 +476,14 @@ public class AbaqusMeshingFSI extends StarMacro
 		{
 			saveLocation = currentDirectory + File.separator + 
 					"FSI_" + (int)Math.abs(initialVel[1]) + "_" + plateGeometry + '_' +
-					(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
-					"_" + (int)(largeChannelHeight/0.0254*1000) +".sim";
+					(int)(plateThickness/0.0254*1000) + "_" + (int)(smChHeight/0.0254*1000) + 
+					"_" + (int)(lgChHeight/0.0254*1000) +".sim";
 		}
 		else
 		{
 			saveLocation = currentDirectory + File.separator + 
 					"FSI_" + (int)Math.abs(initialVel[1]) + "_" + plateGeometry + '_' +
-					(int)(plateHeight/0.0254*1000) + "_" + (int)(smallChannelHeight/0.0254*1000) + 
+					(int)(plateThickness/0.0254*1000) + "_" + (int)(smChHeight/0.0254*1000) + 
 					"_" + numOfPlates + "_Plate_Stack" +".sim";
 		}
 		activeSim.saveState(saveLocation);
