@@ -12,12 +12,12 @@
 ####################FSI File Names and Simulation Parameters#######################
 abaqusModelName:	string:		FSIPinComb:	'This is the name of the model in the Abaqus file
 runStar:			string:		no:				'Switch for running Star-CCM+ after Abaqus
-saveCAEFiles:		string:		yes:					'Switch for saving CAE files for the plate and fluid'
-createStarFile:		string:		yes:					'Specfies if the Star-CCM+ model is created'
+saveCAEFiles:		string:		no:					'Switch for saving CAE files for the plate and fluid'
+createStarFile:		string:		yes:				'Specfies if the Star-CCM+ model is created'
 starProcesses:		string: 	4:					'Specifies the number of processes to use in Star-CCM+'
 abaqusCPUs:			integer:	4:					'Specifies the number of CPU's Abaqus will be using'
 steadyStateOrFSI:	string:		FSI:				'Specifies if the simulation will run in SS or FSI mode'
-numOfPlates:		integer:	2:					'Specifies the number of plates in the model'
+numOfPlates:		integer:	1:					'Specifies the number of plates in the model'
 
 ############################Plate Geometry Parameters#############################
 plateGeometry:		string:		Flat:				'This determines if the geometry is flat or curved'
@@ -26,7 +26,7 @@ plateWidth:			float:		0.1102868:			'This is the width of the plate in meters'
 plateThickness:		float: 		0.001016:			'This is the thickness of the plate in meters'
 
 ########################Fluid Channel Geometry Parameters#########################
-smChHeight:			float:		0.00254:			'This is the thickness of the small fluid channel'
+smChHeight:			float:		0.002032:			'This is the thickness of the small fluid channel'
 lgChHeight:			float:		0.00254:			'This is the thickness of the large fluid channel'
 
 ########################Fluid Plenum Geometry Parameters##########################
@@ -42,12 +42,13 @@ pinOrCombBC:		string:		none:				'"pin", "comb", or "none"'
 
 #############################FSI Coupling Parameters##############################
 couplingScheme:		string:		Explicit:			'Specifies the coupling scheme for FSI'
+fluidSolver:		string:		Coupled:			'Specifies the fluid solver either Coupled or Segregated'
 numImplicitExch:	integer:	20:					'Specifies the number of exchanges within a TS for Implicit coupling'
 iterPerExch:		integer:	250:				'Specifies the number of StarCCM+ iterations per exchange'
 iterPerTS:			integer:	250:				'Specifies the number of iterations in StarCCM+ per TS'
 plateUnderRelax:	float:		1.0:				'Specifies the under relaxation factor for plate deflection'
-avgChVelocity:		float: 		5.0:				'Specifies the average channel flow velocity'
-timeStep:			float:		0.1:				'Specifies the FSI coupling time step'
+avgChVelocity:		float: 		9.0:				'Specifies the average channel flow velocity'
+timeStep:			float:		0.05:				'Specifies the FSI coupling time step'
 minTimeStep:		float:		0.00000001:			'Specifies the minimum coupling time step for Abaqus'
 maxSimTime:			float:		2.5:				'Specifies the maximum time in the simulation'
 morphAtInnIter:		string:		no:					'Specifies if StarCCM+ morphs at inner iterations'

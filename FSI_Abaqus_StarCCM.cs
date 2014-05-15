@@ -18,41 +18,47 @@ public class FSI_Abaqus_StarCCM
     {
         string currentDirectory = Directory.GetCurrentDirectory();
         readGeometryData(Path.Combine(currentDirectory, "FSI_Input_File.txt"));
-
         
         // Running the Abaqus Python script for building the plate and fluid models
-        Console.WriteLine("\n Abaqus is building the fluid and solid domain geomtries...\n");
-        string buildAbaqusCall = "/C abaqus cae noGUI=FSI_GeometryBuilder.py";
-        var abaqusProcess = Process.Start("cmd.exe", buildAbaqusCall);
-        abaqusProcess.WaitForExit();
-        Console.WriteLine("\n Abaqus has finished building the fluid and solid domains!\n");
-
-        // Running Star-CCM+ to build the fluid model and setup the FSI problem
-        if (getStringData("createStarFile").Equals("yes"))
+        if (getDoubleData("smChHeight") != getDoubleData("lgChHeight") && getIntData("numOfPlates") > 1)
         {
-            Console.WriteLine("\n Star-CCM+ is now building the fluid model and setting up the FSI problem...\n");
-            string buildStarCall = "/C starccm+ -new -np 1 -batch AbaqusMeshingFSI.java";
-            var starProcess = Process.Start("cmd.exe", buildStarCall);
-            starProcess.WaitForExit();
-            Console.WriteLine("\n Star-CCM+ has finished building the fluid model and the FSI problem!\n");
+            Console.WriteLine("\n Plate stack must have equal small and large channel heights! \n");
         }
-
-        // Running the FSI simulation
-        if(getStringData("runStar").Equals("yes"))
+        else
         {
-            string couplingScheme = getStringData("couplingScheme");
-            string numStarProcesses = getStringData("starProcesses");
-            double vel = getDoubleData("avgChVelocity");
-            string plateGeometry = getStringData("plateGeometry");
-            int intPlateThickness = (int)(getDoubleData("plateThickness") / 0.0254 * 1000);
-            int intSmChHeight = (int)(getDoubleData("smChHeight") / 0.0254 * 1000);
-            int intLgHeight = (int)(getDoubleData("lgChHeight") / 0.0254 * 1000);
+            Console.WriteLine("\n Abaqus is building the fluid and solid domain geomtries...\n");
+            string buildAbaqusCall = "/C abaqus cae noGUI=FSI_GeometryBuilder.py";
+            var abaqusProcess = Process.Start("cmd.exe", buildAbaqusCall);
+            abaqusProcess.WaitForExit();
+            Console.WriteLine("\n Abaqus has finished building the fluid and solid domains!\n");
 
-            string runStarCall = "/C starccm+ -np " + numStarProcesses + "-time -batch " + "FSI_" +
-                vel + "_" + plateGeometry + "_" + intPlateThickness + "_" + intSmChHeight + "_" +
-                intLgHeight + ".sim";
-            var runStarProcess = Process.Start("cmd.exe", runStarCall);
-            runStarProcess.WaitForExit();
+            // Running Star-CCM+ to build the fluid model and setup the FSI problem
+            if (getStringData("createStarFile").Equals("yes"))
+            {
+                Console.WriteLine("\n Star-CCM+ is now building the fluid model and setting up the FSI problem...\n");
+                string buildStarCall = "/C starccm+ -new -np 1 -batch AbaqusMeshingFSI.java";
+                var starProcess = Process.Start("cmd.exe", buildStarCall);
+                starProcess.WaitForExit();
+                Console.WriteLine("\n Star-CCM+ has finished building the fluid model and the FSI problem!\n");
+            }
+
+            // Running the FSI simulation
+            if (getStringData("runStar").Equals("yes"))
+            {
+                string couplingScheme = getStringData("couplingScheme");
+                string numStarProcesses = getStringData("starProcesses");
+                double vel = getDoubleData("avgChVelocity");
+                string plateGeometry = getStringData("plateGeometry");
+                int intPlateThickness = (int)(getDoubleData("plateThickness") / 0.0254 * 1000);
+                int intSmChHeight = (int)(getDoubleData("smChHeight") / 0.0254 * 1000);
+                int intLgHeight = (int)(getDoubleData("lgChHeight") / 0.0254 * 1000);
+
+                string runStarCall = "/C starccm+ -np " + numStarProcesses + "-time -batch " + "FSI_" +
+                    vel + "_" + plateGeometry + "_" + intPlateThickness + "_" + intSmChHeight + "_" +
+                    intLgHeight + ".sim";
+                var runStarProcess = Process.Start("cmd.exe", runStarCall);
+                runStarProcess.WaitForExit();
+            }
         }
     }
 
