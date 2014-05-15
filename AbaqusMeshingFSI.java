@@ -168,8 +168,14 @@ public class AbaqusMeshingFSI extends StarMacro
 		fluidPhysics.enable(ImplicitUnsteadyModel.class);
 		fluidPhysics.enable(SingleComponentLiquidModel.class);
 		
-		fluidPhysics.enable(SegregatedFlowModel.class);
-		//fluidPhysics.enable(CoupledFlowModel.class);
+		if(reader.getStringData("fluidSolver").equals("Segregated"))
+		{
+			fluidPhysics.enable(SegregatedFlowModel.class);
+		}
+		else if(reader.getStringData("fluidSolver").equals("Coupled"))
+		{
+			fluidPhysics.enable(CoupledFlowModel.class);
+		}
 		
 		fluidPhysics.enable(ConstantDensityModel.class);
 		fluidPhysics.enable(TurbulentModel.class);
@@ -341,40 +347,48 @@ public class AbaqusMeshingFSI extends StarMacro
 		
 		String[] lineProbeRegions = {"Fluid"};
 		DerivedParts smChLineProbe = new DerivedParts(activeSim, lineProbeRegions);
+		DerivedParts lgChLineProbe = new DerivedParts(activeSim, lineProbeRegions);
 		LinePart smChLinePart = null;
 		LinePart lgChLinePart = null;
-		DerivedParts lgChLineProbe = new DerivedParts(activeSim, lineProbeRegions);
 		if(numOfPlates == 1)
 		{
 			if(plateGeometry.equals("Flat"))
 			{		
 				double[] lgChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, -lgChHeight*0.5};
 				double[] lgChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, -(lgChHeight*0.5)};
-				smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
+				lgChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
 				pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
 				
 				double[] smChLineProbeCoord_0 = {wettedPlateWidth*0.5, -outletLength, smChHeight*0.5 + plateThickness};
 				double[] smChLineProbeCoord_1 = {wettedPlateWidth*0.5, plateLength + inletLength, smChHeight*0.5 + plateThickness};
-				lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+				smChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
 				pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
 			}
 			else if(plateGeometry.equals("Curved"))
 			{		
-				double[] lgChLineProbeCoord_0 = {(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in - lgChHeight*0.5)*Math.cos(Math.PI/4)};
-				double[] lgChLineProbeCoord_1 = {r_in*Math.cos(Math.PI/4), plateLength + inletLength, r_in*Math.cos(Math.PI/4)};
-				smChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
+				double[] lgChLineProbeCoord_0 = {(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4),
+												-outletLength, 
+												(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4)};
+				double[] lgChLineProbeCoord_1 = {r_in*Math.cos(Math.PI/4), 
+												plateLength + inletLength, 
+												r_in*Math.cos(Math.PI/4)};
+				lgChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
 				pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
 				
-				double[] smChLineProbeCoord_0 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4), -outletLength, (r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
-				double[] smChLineProbeCoord_1 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4), plateLength + inletLength, (r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
-				lgChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
+				double[] smChLineProbeCoord_0 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4),
+												-outletLength, 
+												(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
+				double[] smChLineProbeCoord_1 = {(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4), 
+												plateLength + inletLength, 
+												(r_in + plateThickness + smChHeight*0.5)*Math.cos(Math.PI/4)};
+				smChLinePart = lgChLineProbe.createLineProbe(smChLineProbeCoord_0, smChLineProbeCoord_1, 255, "SmallChannelLineProbe");
 				pressureProfile_XYPlot.getParts().addObjects(smChLinePart);
 			}
 		}
 		else if(numOfPlates > 1)
 		{
 			double cos_mid = Math.cos(Math.PI/4);
-			r_in = wettedPlateWidth/(Math.PI/4) - plateThickness/2 - numOfPlates*plateSpacing;
+			r_in = wettedPlateWidth/(Math.PI/4) + plateThickness/2 + lgChHeight/2;
 			for(int i = 0; i < numOfPlates+1; i++)
 			{
 				if(plateGeometry.equals("Flat"))
@@ -388,7 +402,7 @@ public class AbaqusMeshingFSI extends StarMacro
 				{		
 					if(i == 0)
 					{
-						double r = r_in + lgChHeight/2;
+						double r = r_in;
 						double[] lineProbeCoord_0 = {r*cos_mid, -outletLength, r*cos_mid};
 						double[] lineProbeCoord_1 = {r*cos_mid, plateLength + inletLength, r*cos_mid};
 						smChLinePart = smChLineProbe.createLineProbe(lineProbeCoord_0, lineProbeCoord_1, 255, "LineProbe_" + i);
@@ -396,7 +410,7 @@ public class AbaqusMeshingFSI extends StarMacro
 					}
 					else
 					{
-						double r = r_in + lgChHeight/2 + plateSpacing*i;
+						double r = r_in - plateSpacing*i;
 						double[] lineProbeCoord_0 = {r*cos_mid, -outletLength, r*cos_mid};
 						double[] lineProbeCoord_1 = {r*cos_mid, plateLength + inletLength, r*cos_mid};
 						smChLinePart = smChLineProbe.createLineProbe(lineProbeCoord_0, lineProbeCoord_1, 255, "LineProbe_" + i);
