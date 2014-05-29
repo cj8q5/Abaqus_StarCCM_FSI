@@ -211,12 +211,12 @@ public class AbaqusMeshingFSI extends StarMacro
 		abaqus.setCouplingBoundaries(fsiSurfaces);
 		if(numOfPlates == 1)
 		{
-			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateThickness/0.0254*1000) +
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_" + (int)(plateThickness/0.0254*1000) +
 					"_" + (int)(smChHeight/0.0254*1000) + "_" + (int)(lgChHeight/0.0254*1000), abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
 		}
 		else
 		{
-			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_Abaqus_" + (int)(plateThickness/0.0254*1000) + 
+			abaqus.setAbaqusExecutionSettings("FSI_" + (int)Math.abs(initialVel[1]) + "_" + (int)(plateThickness/0.0254*1000) + 
 					"_" + (int)(smChHeight/0.0254*1000) + "_" + numOfPlates + "_" + plateGeometry + "_Plate_Stack",
 					abaqusInputFilePath, abqExecutableFileName, numAbaqusCPUs);
 		}
