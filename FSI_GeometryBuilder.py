@@ -952,9 +952,9 @@ def createCurvedFluid(parameters):
 	biasDirection = parameters['chBiasDirection']
 
 	##----------------------------------------PARTS/ASSEMBLY NODES----------------------------------------------------
-	plateSpacing = smChHeight + plateThickness
+	plateSpacing = lgChHeight + plateThickness
 	fluidThickness = plateSpacing*numOfPlates + smChHeight
-	r_in = plateWidth/(math.pi/4) - plateThickness/2 - smChHeight - plateSpacing*(numOfPlates-1)
+	r_in = plateWidth/(math.pi/4) - plateThickness/2 - lgChHeight - plateSpacing*(numOfPlates-1)
 	r_out = r_in + fluidThickness
 	plateTheta = (plateWidth + 0.0254)/r_in
 	wettedTheta = math.pi/4
@@ -1054,13 +1054,20 @@ def createCurvedFluid(parameters):
 	fluidFaces = fluid.faces
 	for i in range(0, numOfPlates+1):
 		if i == 0:
-			r_i.append(plateWidth/(math.pi/4) - plateThickness/2 - smChHeight - plateSpacing*(numOfPlates-1))
+			r_i.append(r_in)
 			r_o.append(r_i[i] + plateThickness + smChHeight + lgChHeight)
 		else:
 			r_i.append(r_i[i-1] + plateSpacing)
 			r_o.append(r_o[i-1] + plateSpacing)
 
-		r_plFlow = (r_i[i] + lgChHeight)
+		if i % 2 == 0:
+			spacing = lgChHeight
+			plateSpacing = spacing + plateThickness
+		else:
+			spacing = smChHeight
+			plateSpacing = spacing + plateThickness
+
+		r_plFlow = (r_i[i] + spacing)
 		flowPlateLengthEdges.append( fluidEdges.findAt(
 			((r_i[i]*cos_0,		halfPlateLength,	r_i[i]*sin_0),),
 			((r_i[i]*cos_1,		halfPlateLength,	r_i[i]*sin_1),),
@@ -1075,7 +1082,7 @@ def createCurvedFluid(parameters):
 			((r_plateEdges*cos_1,	0.0,			r_plateEdges*sin_1),),) )
 
 		if i % 2 == 0:
-			r_lgChEdges = r_i[i] + lgChHeight/2 + plateThickness
+			r_lgChEdges = r_i[i] + lgChHeight/2
 			lgChannelEdges.append( fluidEdges.findAt(
 				((r_lgChEdges*cos_0,	plateLength,	r_lgChEdges*sin_0),),
 				((r_lgChEdges*cos_1,	plateLength,	r_lgChEdges*sin_1),),
@@ -1090,7 +1097,7 @@ def createCurvedFluid(parameters):
 				((r_smChEdges*cos_0,	0.0,			r_smChEdges*sin_0),),
 				((r_smChEdges*cos_1,	0.0,			r_smChEdges*sin_1),),) )
 
-		r_flowWidth = r_i[i] + lgChHeight
+		r_flowWidth = r_i[i] + spacing
 		if i == 0:
 			flowWidthEdges.append( fluidEdges.findAt( 
 									((r_i[i]*cos_mid,		-outletPlLength,			r_i[i]*sin_mid),),
