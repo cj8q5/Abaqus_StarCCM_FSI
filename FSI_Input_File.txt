@@ -11,6 +11,7 @@
 
 ####################FSI File Names and Simulation Parameters#######################
 abaqusModelName:	string:		FSIPinComb:	'This is the name of the model in the Abaqus file
+createAbqInpFiles:  string:		yes:			'Switch for creating new Abaqus input files'
 runStar:			string:		no:				'Switch for running Star-CCM+ after Abaqus
 saveCAEFiles:		string:		no:					'Switch for saving CAE files for the plate and fluid'
 createStarFile:		string:		yes:				'Specfies if the Star-CCM+ model is created'

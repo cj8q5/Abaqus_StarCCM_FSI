@@ -369,9 +369,9 @@ public class AbaqusMeshingFSI extends StarMacro
 				double[] lgChLineProbeCoord_0 = {(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4),
 												-outletLength, 
 												(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4)};
-				double[] lgChLineProbeCoord_1 = {r_in*Math.cos(Math.PI/4), 
+				double[] lgChLineProbeCoord_1 = {(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4), 
 												plateLength + inletLength, 
-												r_in*Math.cos(Math.PI/4)};
+												(r_in - lgChHeight*0.5)*Math.cos(Math.PI/4)};
 				lgChLinePart = smChLineProbe.createLineProbe(lgChLineProbeCoord_0, lgChLineProbeCoord_1, 255, "LargeChannelLineProbe");
 				pressureProfile_XYPlot.getParts().addObjects(lgChLinePart);
 				
