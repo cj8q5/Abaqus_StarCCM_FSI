@@ -433,8 +433,10 @@ def createFlatFluid(parameters):
 	flOutletBias = parameters['flOutletBias']
 	flSmChHeightNodes = parameters['flSmChHeightNodes']
 	flSmChHeightBias = parameters['flSmChHeightBias']
+	smChWallCellHgt = parameters['flSmChWallCellHgt']
 	flLgChHeightNodes = parameters['flLgChHeightNodes']
 	flLgChHeightBias = parameters['flLgChHeightBias']
+	lgChWallCellHgt = parameters['flLgChWallCellHgt']
 	flPlHeightNodes = parameters['flPlHeightNodes']
 	flPlHeightBias = parameters['flPlHeightBias']
 	biasDirection = parameters['chBiasDirection']
@@ -474,10 +476,14 @@ def createFlatFluid(parameters):
 	fluid = mdb.models[modelName].parts['Fluid']
 	fluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=plateLength)
 	fluid.DatumPlaneByPrincipalPlane(principalPlane=XZPLANE, offset=0.0)
+	fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=-lgChHeight+lgChWallCellHgt)
+	fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=-lgChWallCellHgt)
 	for i in range(0, numOfPlates):
 		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=smplateSpacing*i)
 		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=(smplateSpacing*i) + plateThickness)
-
+		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=(smplateSpacing*i) + plateThickness + smChWallCellHgt)
+		fluid.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset=(smplateSpacing*i) + smplateSpacing - smChWallCellHgt)
+			
 	# Grabbing the datum planes and the cells of the fluid for partitioning the fluid
 	fluidCells = fluid.cells
 	datumPlanes = fluid.datums
@@ -489,7 +495,7 @@ def createFlatFluid(parameters):
 	fluid.Set(cells = entireFluidGeometry, name = 'EntireFluidGeometry')
 
 	# Partitioning the fluid for meshing
-	for i in range(2, (numOfPlates*2)+4):
+	for i in range(2, (numOfPlates*4)+6):
 		pickedCells = fluid.sets['EntireFluidGeometry'].cells
 		fluid.PartitionCellByDatumPlane(datumPlane=datumPlanes[i], cells=pickedCells)
 
@@ -500,6 +506,7 @@ def createFlatFluid(parameters):
 			'FluidInletLength', plateLength + (inletPlLength*0.5) ]
 	for k in range(0, 3):
 		flowPlateEdges = []
+		ch = lgChWallCellHgt
 		for i in range(0, numOfPlates+1):
 			w = 0.0
 			for j in range(0, 2):
@@ -507,7 +514,12 @@ def createFlatFluid(parameters):
 										((w,	pos[(k*2)+1],	-lgChHeight + lgplateSpacing*i),) ))
 				flowPlateEdges.append(fluidEdges.findAt( 
 										((w,	pos[(k*2)+1],	smplateSpacing*i),) ))
+				flowPlateEdges.append(fluidEdges.findAt( 
+										((w,	pos[(k*2)+1],	-lgChHeight + ch + lgplateSpacing*i),) ))
+				flowPlateEdges.append(fluidEdges.findAt( 
+										((w,	pos[(k*2)+1],	smplateSpacing*i - ch),) ))
 				w = plateWidth
+			ch = smChWallCellHgt
 		fluid.Set(edges=flowPlateEdges, name=pos[k*2])
 
 
@@ -530,6 +542,31 @@ def createFlatFluid(parameters):
 												((w, yPos[l], zPos[(k*2)+1] + smplateSpacing*i*2),) ))
 					w = plateWidth
 		fluid.Set(edges=flowPlateEdges, name=zPos[k*2])
+
+	flowPlateEdges = []
+	if numOfPlates == 1:
+		zPos = [-lgChHeight + lgChWallCellHgt*0.5,		-lgChWallCellHgt*0.5,
+				plateThickness + smChWallCellHgt*0.5,	smplateSpacing - smChWallCellHgt*0.5]
+	else:
+		zPos = [-lgChWallCellHgt*0.5, plateThickness + smChWallCellHgt*0.5]
+
+	yPos = [ -outletPlLength, 0.0, plateLength, plateLength + inletPlLength ] 
+	for k in range(0, len(zPos)):
+		w = 0.0
+		for i in range(0, numOfPlates):
+			for l in range(0,len(yPos)):
+				w = 0.0
+				for j in range(0, 2):
+					if i == 0:
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], -lgChHeight + lgChWallCellHgt*0.5),) ))
+					elif i == (numOfPlates-1):
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], (smplateSpacing*(i+1)) - smChWallCellHgt*0.5),) ))
+					if numOfPlates == 1:
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], zPos[k]),) ))
+					else:
+						flowPlateEdges.append(fluidEdges.findAt( ((w, yPos[l], (smplateSpacing*i) + zPos[k]),) ))
+					w = plateWidth
+		fluid.Set(edges=flowPlateEdges, name='WallCellHeight')
 
 	halfPlateWidth = plateWidth*0.5
 	yPos = [ -outletPlLength,	0.0,			plateLength,	plateLength + inletPlLength ]
@@ -583,6 +620,10 @@ def createFlatFluid(parameters):
 	fluidInletEdges = fluid.sets['FluidInletLength'].edges
 	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidInletEdges, ratio=flInletBias,
         number=flInletNodes, constraint=FINER)
+
+	fluidWallCellEdges = fluid.sets['WallCellHeight'].edges
+	fluid.seedEdgeByBias(biasMethod=DOUBLE, endEdges=fluidWallCellEdges, ratio=1.0,
+		number=1, constraint=FINER)
 
 	fluidSmallChEdges = fluid.sets['SmallChHeight'].edges
 	fluidLargeChEdges = fluid.sets['LargeChHeight'].edges
@@ -1074,7 +1115,7 @@ def createCurvedFluid(parameters):
 			((r_plFlow*cos_0,	halfPlateLength,	r_plFlow*sin_0),),
 			((r_plFlow*cos_1,	halfPlateLength,	r_plFlow*sin_1),),) )
 
-		r_plateEdges = r_i[i] + plateThickness/2 + lgChHeight
+		r_plateEdges = r_i[i] + plateThickness/2 + spacing
 		plateEdges.append( fluidEdges.findAt(
 			((r_plateEdges*cos_0,	plateLength,	r_plateEdges*sin_0),),
 			((r_plateEdges*cos_1,	plateLength,	r_plateEdges*sin_1),),
@@ -1124,17 +1165,17 @@ def createCurvedFluid(parameters):
 		if i == numOfPlates:
 			continue
 
-		r_fsiBack = r_i[i] + lgChHeight
+		r_fsiBack = r_i[i] + spacing
 		fsiBack = fluidFaces.findAt(
 									((r_fsiBack*cos_mid,	plateLength*0.5, r_fsiBack*cos_mid),),)
 		fluid.Surface(side1Faces = fsiBack, name = 'FSI_Back_' + str(i))
 
-		r_fsiFront = r_i[i] + lgChHeight + plateThickness
+		r_fsiFront = r_i[i] + spacing + plateThickness
 		fsiFront = fluidFaces.findAt(
 									((r_fsiFront*cos_mid,	plateLength*0.5, r_fsiFront*cos_mid),),)
 		fluid.Surface(side1Faces = fsiFront, name = 'FSI_Front_' + str(i))
 
-		r_fsiTopBot = r_i[i] + lgChHeight + plateThickness/2
+		r_fsiTopBot = r_i[i] + spacing + plateThickness/2
 		fsiTop = fluidFaces.findAt(
 									((r_fsiTopBot*cos_mid,	plateLength,	r_fsiTopBot*cos_mid),),)
 		fluid.Surface(side1Faces = fsiTop, name = 'FSI_Top_' + str(i))
