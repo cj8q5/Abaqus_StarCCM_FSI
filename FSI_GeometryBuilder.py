@@ -35,6 +35,7 @@ import math
 def createFlatPlate(geometryParameters):
 	# GRABBING ALL OF THE GEOMETRY PARAMETERS
 	plateName = 'Plate'
+	starVersion = parameters['starVersion']
 	modelName = parameters['abaqusModelName']
 	plateLength = parameters['plateLength']
 	plateWidth = parameters['plateWidth']
@@ -401,7 +402,7 @@ def createFlatPlate(geometryParameters):
 	createInputFile(fileName, modelName)
 
 	# Appending the written input file for explicit FSI coupling
-	appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
+	appendInputFile(starVersion, couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
 
 
 '''
@@ -675,6 +676,7 @@ def createCurvedPlate(geometryParameters):
 	    Outputs:
 	"""
 	# GRABBING ALL OF THE GEOMETRY PARAMETERS
+	starVersion = parameters['starVersion']
 	plateName = 'Plate'
 	modelName = parameters['abaqusModelName']
 	plateLength = parameters['plateLength']
@@ -959,7 +961,7 @@ def createCurvedPlate(geometryParameters):
 	createInputFile(fileName, modelName)
 
 	# Appending the written input file for explicit FSI coupling
-	appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
+	appendInputFile(starVersion, couplingScheme, BC, timeStep, maxSimTime, minTimeStep)
 
 def createCurvedFluid(parameters):
 	modelName = parameters['abaqusModelName']
@@ -1336,13 +1338,19 @@ def createInputFile(jobName, modelName):
 		activateLoadBalancing=False, multiprocessingMode=DEFAULT, numCpus=1)
 	mdb.jobs[jobName].writeInput(consistencyChecking=OFF)
 
-def appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep):
+def appendInputFile(starVersion, couplingScheme, BC, timeStep, maxSimTime, minTimeStep):
 	# Appending the written input file for explicit FSI coupling
 	with open(couplingScheme + "_" + BC + "Plate.inp", "a") as inputFile:
 		if couplingScheme == 'Explicit':
 			couplingScheme = 'GAUSS-SEIDEL'
 		elif couplingScheme == 'Implicit':
 			couplingScheme = 'ITERATIVE'
+		if starVersion == '8_04':
+			control_0 = ', Controls=Control-1\n'
+			control_1 = 'Control-1'
+		elif starVersion == '9_02':
+			control_0 = '\n'
+			control_1 = 'Control'
 
 		inputFileLines = [
     		"** ----------------------------------------------------------------\n",
@@ -1363,13 +1371,13 @@ def appendInputFile(couplingScheme, BC, timeStep, maxSimTime, minTimeStep):
     		"**\n",
     		"*Output, history, variable=PRESELECT\n",
     		"**\n",
-    		"*CO-SIMULATION, NAME=FSI_Mech, PROGRAM=MULTIPHYSICS, CONTROLS=Control-1\n",
+    		"*CO-SIMULATION, NAME=FSI_Mech, PROGRAM=MULTIPHYSICS" + control_0,
     		"*CO-SIMULATION REGION, TYPE=SURFACE, EXPORT\n",
     		"ASSEMBLY_FSI_INTERFACE, U\n",
     		"ASSEMBLY_FSI_INTERFACE, V\n",
     		"*CO-SIMULATION REGION, TYPE=SURFACE, IMPORT\n",
     		"ASSEMBLY_FSI_INTERFACE, CF\n",
-    		"*CO-SIMULATION CONTROLS, NAME=Control-1, COUPLING SCHEME=" + couplingScheme +", SCHEME MODIFIER=LAG,\n",
+    		"*CO-SIMULATION CONTROLS, NAME=" + control_1 + ", COUPLING SCHEME=" + couplingScheme +", SCHEME MODIFIER=LAG,\n",
     		"STEP SIZE=" + str(timeStep) + ", TIME INCREMENTATION=SUBCYCLE, TIME MARKS=YES\n",
     		"**\n",
     		"*End Step\n"]			

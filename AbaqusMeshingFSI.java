@@ -170,6 +170,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		{
 			fluidPhysics = physics.createPhysicsContinua("Water");
 			physics.setRegionPhysics("Fluid", "Water");
+			physics.deletePhysicsContinuum("Imported 3D Continuum");
 		}
 		else if(starVersion.equals("8_04"))
 		{
@@ -272,6 +273,8 @@ public class AbaqusMeshingFSI extends StarMacro
 		{
 			morpher.innerIterationMorphing(false);
 		}
+		
+		morpher.setMorphFromZero(true);
 		
 		if(SSorFSI.equals("SS"))
 		{
