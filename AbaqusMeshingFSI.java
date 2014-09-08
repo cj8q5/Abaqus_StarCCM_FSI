@@ -35,8 +35,10 @@ import star.turbulence.RansTurbulenceModel;
 import star.turbulence.TurbulentModel;
 import star.vis.LinePart;
 import star.vis.Scene;
+import starClasses.CoSimMapper;
 import starClasses.CoSimulationAbaqus;
-import starClasses.ContiuumBuilder;
+import starClasses.CoSimulationAbaqus_9_02_007;
+import starClasses.ContinuumBuilder;
 import starClasses.DerivedParts;
 import starClasses.FieldFunctions;
 import starClasses.ImportCAE;
@@ -55,7 +57,7 @@ public class AbaqusMeshingFSI extends StarMacro
 	public void execute() 
 	{
 		String currentDirectory = System.getProperty("user.dir");
-		String abqExecutableFileName = "abq6122.bat";
+		//String abqExecutableFileName = "abq6122.bat";
 		
 		// Star-CCM+ settings and variables
 		Simulation activeSim = getActiveSimulation();
@@ -78,6 +80,8 @@ public class AbaqusMeshingFSI extends StarMacro
 		}
 		
 		// Grabbing the Co-Simulation settings and variables
+		String starVersion = reader.getStringData("starVersion");
+		String abqExecutableFileName = reader.getStringData("abqExecutable");
 		int numOfPlates = reader.getIntData("numOfPlates");
 		String plateGeometry = reader.getStringData("plateGeometry");
 		String couplingScheme = reader.getStringData("couplingScheme");
@@ -160,8 +164,17 @@ public class AbaqusMeshingFSI extends StarMacro
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 			PHYSICS NODE */
 		// Creating the physics continuum
-		ContiuumBuilder physics = new ContiuumBuilder(activeSim);
-		PhysicsContinuum fluidPhysics = physics.setPhysicsName("Physics 1", "Water");
+		ContinuumBuilder physics = new ContinuumBuilder(activeSim);
+		PhysicsContinuum  fluidPhysics = null;
+		if(starVersion.equals("9_02"))
+		{
+			fluidPhysics = physics.createPhysicsContinua("Water");
+			physics.setRegionPhysics("Fluid", "Water");
+		}
+		else if(starVersion.equals("8_04"))
+		{
+			fluidPhysics = physics.setPhysicsName("Physics 1", "Water");
+		}
 		//PhysicsContinuum fluidPhysics = physics.createPhysicsContinua("Water");
 		
 		fluidPhysics.enable(ThreeDimensionalModel.class);
@@ -198,7 +211,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 			CO-SIMULATIONS NODE */
 		// Creating the Abaqus Co-Simulation
-		CoSimulationAbaqus abaqus = new CoSimulationAbaqus(activeSim, "Fluid");
+		CoSimulationAbaqus abaqus = new CoSimulationAbaqus(starVersion, activeSim, "Fluid");
 		String[] fsiSurfaces = new String[numOfPlates*4];
 		for(int i = 0; i < numOfPlates; i++)
 		{
@@ -222,7 +235,17 @@ public class AbaqusMeshingFSI extends StarMacro
 		}
 		abaqus.abaqusCouplingAlgorithm(couplingScheme, "Star Leads", couplingTimeStep);
 		abaqus.setFieldExchangeControls(numExchanges, iterationsPerExchange, deflectionUnderRelax);
-		abaqus.setMapperTolSettings(0.01,0.01);
+		
+		if(starVersion.equals("8_04"))
+		{
+			CoSimMapper mapper = new CoSimMapper(activeSim);
+			mapper.setMapperTolSettings(0.01,0.01);
+			
+		}
+		else if(starVersion.equals("9_02"))
+		{
+			abaqus.setMapperTolSettings(0.01,0.01);
+		}
 
 		/**-----------------------------------------------------------------------------------------------------------------------------------------------------
 			SOLVERS NODE */
@@ -502,16 +525,7 @@ public class AbaqusMeshingFSI extends StarMacro
 		}
 		activeSim.saveState(saveLocation);
 		AbaqusCoSimulation coSim = (AbaqusCoSimulation) activeSim.get(CoSimulationManager.class).getCoSimulation("Abaqus Co-Simulation 1");
-		//activeSim.getSimulationIterator().run();
-		try {
-			coSim.terminate();
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		coSim.terminate();
 		//activeSim.saveState(saveLocation);
 		activeSim.close();
 	}
